@@ -1,0 +1,95 @@
+'use client'
+import {useCallback,useEffect,useState} from 'react'
+import {useParams,useRouter} from 'next/navigation'
+import {QRCodeSVG} from 'qrcode.react'
+import {supabase,ensureAuth} from '@/lib/supabase'
+type P={id:string;user_id:string;nickname:string;is_host:boolean;is_connected:boolean}
+type S={id:string;question_text:string;round:number;status:string;ends_at:string;game_type:string;subject_id:string|null}
+type V={voter_id:string;target_player_id:string;choice:string|null}
+type R={id:string;status:string;host_id:string}
+const COL=['bg-purple-500','bg-pink-500','bg-orange-500','bg-cyan-500','bg-emerald-500','bg-yellow-500']
+const GAMES=[['most-likely','😂','ใครมีโอกาสมากที่สุด'],['truth','🤥','จริงหรือมั่ว'],['quick','⏱️','5 วิ ตอบให้ทัน'],['mission','🎡','สุ่มภารกิจ']]
+export default function Room(){
+  const code=String(useParams().code).toUpperCase();const router=useRouter()
+  const [uid,setUid]=useState('');const [room,setRoom]=useState<R|null>(null);const [ps,setPs]=useState<P[]>([])
+  const [s,setS]=useState<S|null>(null);const [vs,setVs]=useState<V[]>([]);const [now,setNow]=useState(Date.now())
+  const [qr,setQr]=useState(false);const [off,setOff]=useState(false);const [err,setErr]=useState('')
+  const [game,setGame]=useState('most-likely')
+  const load=useCallback(async()=>{
+    const id=await ensureAuth();setUid(id)
+    const {data:r}=await supabase.from('rooms').select('id,status,host_id').eq('code',code).maybeSingle()
+    if(!r){router.replace(`/join?room=${code}`);return}
+    setRoom(r)
+    const [p,g]=await Promise.all([supabase.from('players').select('*').eq('room_id',r.id).order('joined_at'),
+      supabase.from('game_sessions').select('*').eq('room_id',r.id).order('started_at',{ascending:false}).limit(1).maybeSingle()])
+    setPs((p.data||[]).filter((x:P)=>x.is_connected));setS(g.data)
+    if(g.data){const v=await supabase.from('votes').select('voter_id,target_player_id,choice').eq('game_session_id',g.data.id);setVs(v.data||[])}else setVs([])
+  },[code,router])
+  useEffect(()=>{load()
+    const ch=supabase.channel(`room-${code}`)
+    for(const table of ['players','rooms','game_sessions','votes'])ch.on('postgres_changes',{event:'*',schema:'public',table},load)
+    ch.subscribe(st=>setOff(st==='CLOSED'||st==='CHANNEL_ERROR'))
+    const t=setInterval(()=>setNow(Date.now()),250)
+    return()=>{supabase.removeChannel(ch);clearInterval(t)}},[code,load])
+  const me=ps.find(p=>p.user_id===uid);const host=room?.host_id===uid
+  const gt=s?.game_type
+  const left=s?Math.max(0,Math.ceil((new Date(s.ends_at).getTime()-now)/1000)):0
+  const myVote=vs.find(v=>v.voter_id===me?.id)
+  useEffect(()=>{if(s?.status==='voting'&&(left===0||(gt==='most-likely'&&ps.length>0&&vs.length>=ps.length)))
+    supabase.rpc('finish_round',{p_session:s.id}).then(load)},[left,vs.length,ps.length,s,gt,load])
+  async function call(fn:string,args:object){const {error}=await supabase.rpc(fn,args);setErr(error?error.message:'');load()}
+  if(!room)return <main className="p-10 text-center text-xl">กำลังโหลด…</main>
+  if(room.status==='closed')return <main className="p-10 text-center space-y-4"><div className="text-6xl">⌛</div><p>ห้องนี้ปิดแล้ว</p><a className="btn" href="/">กลับหน้าแรก</a></main>
+  const link=typeof window!=='undefined'?`${location.origin}/join?room=${code}`:''
+  const tally=ps.map(p=>({p,n:vs.filter(v=>v.target_player_id===p.id).length})).sort((a,b)=>b.n-a.n)
+  const top=tally.filter(t=>t.n===tally[0]?.n&&t.n>0)
+  const nm=ps.find(p=>p.id===s?.subject_id)?.nickname??'?'
+  const yes=vs.filter(v=>v.choice==='true').length,no=vs.filter(v=>v.choice==='false').length
+  const title=!s?'':gt==='truth'?`${nm} บอกว่า “${s.question_text}” จริงหรือมั่ว?`:gt==='quick'?`${nm} ต้อง${s.question_text} ใน 5 วิ!`:gt==='mission'?`${nm} ต้อง${s.question_text}`:`“${s.question_text}”`
+  return(<main className="max-w-md mx-auto p-4 space-y-4">
+    {off&&<div role="status" className="card text-center">📡 การเชื่อมต่อขาดหาย กำลังเชื่อมต่อใหม่...</div>}
+    {err&&<p role="alert" className="text-pink-400 text-center">{err}</p>}
+    <header className="text-center"><div className="text-sm text-white/60">🍻 วงแตก • ROOM</div>
+      <div className="text-4xl font-mono font-extrabold tracking-[.3em]">{code}</div></header>
+    {room.status==='waiting'&&<>
+      <div className="flex gap-2"><button className="btn alt" onClick={()=>navigator.clipboard.writeText(link)}>📋 คัดลอกลิงก์</button><button className="btn alt" onClick={()=>setQr(true)}>📱 QR</button></div>
+      <section className="card"><h2 className="mb-3 font-bold">ผู้เล่น {ps.length} คน</h2>
+        <ul className="grid grid-cols-2 gap-3">{ps.map((p,i)=><li key={p.id} className="flex items-center gap-2">
+          <span className={`w-10 h-10 rounded-full grid place-items-center font-bold ${COL[i%COL.length]}`}>{p.nickname[0]}</span>
+          <span className="truncate">{p.nickname}{p.is_host&&' 👑'}</span>
+          {host&&!p.is_host&&<button aria-label={`เตะ ${p.nickname}`} onClick={()=>call('kick_player',{p_code:code,p_player:p.id})}>✕</button>}</li>)}</ul></section>
+      {host?<div className="space-y-2">
+        <button className="btn alt" onClick={()=>{const t=prompt('เพิ่มคำถาม (ไม่เกิน 200 ตัวอักษร)');if(t)call('add_custom_question',{p_code:code,p_text:t})}}>+ เพิ่มคำถาม</button>
+        <ul className="grid grid-cols-2 gap-2">{GAMES.map(([id,ic,t])=><li key={id}><button aria-pressed={game===id} onClick={()=>setGame(id)} className={`card w-full py-4 ${game===id?'border-pink-400 shadow-[0_0_16px_#ec489966]':''}`}><div className="text-3xl">{ic}</div><div className="text-sm">{t}</div></button></li>)}</ul>
+        <button className="btn" disabled={ps.length<2} onClick={()=>call('start_game',{p_code:code,p_game:game})}>🎲 เริ่มเกม</button>
+        <button className="btn alt" onClick={()=>confirm('ปิดห้อง?')&&call('close_room',{p_code:code})}>ปิดห้อง</button></div>
+        :<p className="text-center text-white/60">รอ Host เริ่มเกม...</p>}
+      <p className="text-center text-sm text-white/40">❓ Quiz เร็ว ๆ นี้</p></>}
+    {room.status==='playing'&&s&&<>
+      <p className="text-center text-white/60">รอบที่ {s.round}</p>
+      <h1 className="text-2xl font-bold text-center">{title}</h1>
+      {s.status==='voting'?<>
+        <div className={`mx-auto w-20 h-20 rounded-full grid place-items-center text-3xl font-bold border-4 ${left<=5?'border-red-500 animate-pulse':'border-pink-500'}`} aria-live="polite">{left}</div>
+        {gt==='quick'?<p className="text-center text-lg">⏱️ {nm} กำลังตอบ...</p>
+        :gt==='truth'&&me?.id===s.subject_id?<p className="text-center text-lg">รอเพื่อนโหวต... ({vs.length}/{ps.length-1})</p>
+        :myVote?<p className="text-center text-lg">✓ เลือกแล้ว<br/><span className="text-white/60 text-sm">รอผู้เล่นคนอื่น...</span></p>
+        :gt==='truth'?<div className="grid grid-cols-2 gap-3"><button className="btn" onClick={()=>call('cast_choice',{p_session:s.id,p_choice:'true'})}>✅ จริง</button><button className="btn alt" onClick={()=>call('cast_choice',{p_session:s.id,p_choice:'false'})}>❌ มั่ว</button></div>
+        :<ul className="grid grid-cols-2 gap-3">{ps.filter(p=>p.id!==me?.id).map((p,i)=><li key={p.id}>
+          <button className="card w-full py-6 hover:border-pink-400" onClick={()=>call('cast_vote',{p_session:s.id,p_target:p.id})}>
+            <span className={`block mx-auto w-12 h-12 rounded-full leading-[3rem] font-bold ${COL[i%COL.length]}`}>{p.nickname[0]}</span>{p.nickname}</button></li>)}</ul>}</>
+      :<section className="space-y-3">
+        {gt==='most-likely'&&<>
+          <div className="text-center text-5xl">{top.length===1?'👑':'🔥'}</div>
+          <h2 className="text-center text-2xl font-bold">{top.length===1?`${top[0].p.nickname} ตัวตึงประจำวง`:top.length>1?`เสมอกัน! ${top.map(t=>t.p.nickname).join(' vs ')}`:'ไม่มีใครโหวต'}</h2>
+          {tally.map(({p,n})=><div key={p.id}><div className="flex justify-between"><span>{p.nickname}</span><b>{n}</b></div>
+            <div className="h-3 rounded bg-white/10"><div className="h-3 rounded bg-gradient-to-r from-purple-500 to-pink-500 transition-all" style={{width:`${ps.length?n/ps.length*100:0}%`}}/></div></div>)}</>}
+        {gt==='truth'&&<div className="text-center space-y-1"><div className="text-5xl">🤥</div><h2 className="text-2xl font-bold">{yes>no?'เพื่อนเชื่อ ✅':yes<no?'เพื่อนไม่เชื่อ ❌':'เสมอ!'}</h2><p>จริง {yes} • มั่ว {no}</p><p className="text-white/60">{nm} เฉลยหน่อย!</p></div>}
+        {gt==='quick'&&<div className="text-center space-y-1"><div className="text-5xl">⏱️</div><h2 className="text-2xl font-bold">หมดเวลา!</h2><p className="text-white/60">{nm} ทำทันไหม? เพื่อน ๆ ช่วยกันตัดสิน</p></div>}
+        {gt==='mission'&&<div className="text-center space-y-1"><div className="text-5xl">🎡</div><h2 className="text-2xl font-bold">{title}</h2></div>}
+        {host?<div className="space-y-2"><button className="btn" onClick={()=>call('start_game',{p_code:code,p_game:s.game_type})}>🎲 เล่นรอบต่อไป</button>
+          <button className="btn alt" onClick={()=>call('back_to_lobby',{p_code:code})}>🏠 กลับ Lobby</button></div>:<p className="text-center text-white/60">รอ Host...</p>}</section>}</>}
+    {qr&&<div role="dialog" aria-modal className="fixed inset-0 bg-black/80 grid place-items-center p-6 z-10" onClick={()=>setQr(false)}>
+      <div className="card text-center space-y-3" onClick={e=>e.stopPropagation()}><h2 className="font-bold">สแกนเพื่อเข้าห้อง</h2>
+        <div className="bg-white p-3 rounded-xl inline-block"><QRCodeSVG value={link} size={220}/></div>
+        <div className="font-mono text-2xl tracking-widest">{code}</div><button className="btn" onClick={()=>setQr(false)}>ปิด</button></div></div>}
+  </main>)}
