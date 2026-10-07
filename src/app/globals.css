@@ -5,8 +5,8 @@ body{background:radial-gradient(60% 40% at 50% 0%,#3b1d6e55,transparent),#0b0b12
 .card{background:#ffffff0d;border:1px solid #ffffff1a;border-radius:1.25rem;backdrop-filter:blur(12px);padding:1rem}
 .inp{width:100%;padding:1rem;border-radius:1rem;background:#ffffff10;border:1px solid #ffffff22;font-size:1.125rem;outline:none}.inp:focus{border-color:#ec4899}
 @keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}.fl{animation:fl 3s ease-in-out infinite}
-html{-webkit-text-size-adjust:100%;text-size-adjust:100%;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
-body{overflow-x:hidden;overscroll-behavior-y:none;padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom)}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body{overflow-x:clip;padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom)}
 .btn,.inp{touch-action:manipulation;min-height:3.25rem}
 .inp{font-size:16px;-webkit-appearance:none;appearance:none}
 @media(max-width:360px){.btn{font-size:1rem;padding:.875rem}h1{font-size:1.75rem}}
