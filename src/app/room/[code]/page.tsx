@@ -15,6 +15,7 @@ export default function Room(){
   const [s,setS]=useState<S|null>(null);const [vs,setVs]=useState<V[]>([]);const [now,setNow]=useState(Date.now())
   const [qr,setQr]=useState(false);const [off,setOff]=useState(false);const [err,setErr]=useState('')
   const [game,setGame]=useState('most-likely')
+  const [skew,setSkew]=useState(0)
   const load=useCallback(async()=>{
     const id=await ensureAuth();setUid(id)
     const {data:r}=await supabase.from('rooms').select('id,status,host_id').eq('code',code).maybeSingle()
@@ -26,6 +27,8 @@ export default function Room(){
     if(g.data){const v=await supabase.from('votes').select('voter_id,target_player_id,choice').eq('game_session_id',g.data.id);setVs(v.data||[])}else setVs([])
   },[code,router])
   useEffect(()=>{load()
+    const t0=Date.now()
+    ensureAuth().then(()=>supabase.rpc('server_now')).then(({data})=>{if(data)setSkew(new Date(data).getTime()-(t0+Date.now())/2)})
     const ch=supabase.channel(`room-${code}`)
     for(const table of ['players','rooms','game_sessions','votes'])ch.on('postgres_changes',{event:'*',schema:'public',table},load)
     ch.subscribe(st=>setOff(st==='CLOSED'||st==='CHANNEL_ERROR'))
@@ -33,9 +36,9 @@ export default function Room(){
     return()=>{supabase.removeChannel(ch);clearInterval(t)}},[code,load])
   const me=ps.find(p=>p.user_id===uid);const host=room?.host_id===uid
   const gt=s?.game_type
-  const left=s?Math.max(0,Math.ceil((new Date(s.ends_at).getTime()-now)/1000)):0
+  const left=s?Math.max(0,Math.ceil((new Date(s.ends_at).getTime()-(now+skew))/1000)):0
   const myVote=vs.find(v=>v.voter_id===me?.id)
-  useEffect(()=>{if(s?.status==='voting'&&(left===0||(gt==='most-likely'&&ps.length>0&&vs.length>=ps.length)))
+  useEffect(()=>{if(s?.status==='voting'&&(left===0||(gt==='most-likely'&&ps.length>1&&vs.length>=ps.length)||(gt==='truth'&&ps.length>1&&vs.length>=ps.length-1)))
     supabase.rpc('finish_round',{p_session:s.id}).then(load)},[left,vs.length,ps.length,s,gt,load])
   async function call(fn:string,args:object){const {error}=await supabase.rpc(fn,args);setErr(error?error.message:'');load()}
   if(!room)return <main className="p-10 text-center text-xl">กำลังโหลด…</main>
