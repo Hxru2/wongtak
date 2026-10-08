@@ -11,6 +11,15 @@ type Sec={player_id:string;word:string;is_odd:boolean}
 const COL=['bg-purple-500','bg-pink-500','bg-orange-500','bg-cyan-500','bg-emerald-500','bg-yellow-500']
 const GAMES=[['odd','🕵️','ตัวปลอม'],['sync','🧠','คิดตรงกัน'],['most-likely','😂','ใครมีโอกาสมากที่สุด'],['never','🙋','ใครเคย…'],['either','⚖️','เลือกข้าง'],['truth','🤥','จริงหรือมั่ว'],['quick','⏱️','5 วิ ตอบให้ทัน'],['mission','🎡','สุ่มภารกิจ']]
 const HINT:Record<string,string>={either:'พิมพ์สองตัวเลือก คั่นด้วย | เช่น กินเผ็ด|กินหวาน',sync:'พิมพ์คำถามตามด้วย 4 ตัวเลือก คั่นด้วย | เช่น ไปเที่ยวไหน|ทะเล|ภูเขา|ต่างประเทศ|อยู่บ้าน',never:'พิมพ์ต่อจาก "ใครเคย" เช่น แอบดูโทรศัพท์คนอื่น',truth:'พิมพ์เรื่องที่ให้ผู้เล่นบอก เช่น เคยหลับในโรงหนัง',quick:'พิมพ์โจทย์ เช่น บอกชื่อสัตว์ 3 ชนิด',mission:'พิมพ์ภารกิจ เช่น เต้นท่าอะไรก็ได้ 10 วินาที','most-likely':'พิมพ์ในรูป ใครมีโอกาส…?'}
+const DESC:Record<string,string>={
+  odd:'ทุกคนได้คำลับบนมือถือ ทุกคนได้คำเดียวกันยกเว้น 1 คนที่ได้คำคล้ายกัน ผลัดกันอธิบายคำโดยไม่บอกตรง ๆ แล้วโหวตหาตัวปลอม (ต้อง 3 คนขึ้นไป • 90 วินาที)',
+  sync:'มีคำถาม 4 ตัวเลือก ให้เลือกข้อที่คิดว่าเพื่อนส่วนใหญ่จะเลือก ใครตรงกับคนส่วนใหญ่ได้ 👑 (20 วินาที)',
+  'most-likely':'ระบบถามว่า "ใครมีโอกาส…มากที่สุด" ทุกคนโหวตเพื่อนที่เข้ากับคำถามที่สุด โหวตตัวเองไม่ได้ (15 วินาที)',
+  never:'ระบบบอกเรื่องหนึ่ง ทุกคนตอบพร้อมกันว่า เคย หรือ ไม่เคย แล้วดูว่าวงเป็นยังไง (15 วินาที)',
+  either:'เลือกข้าง A หรือ B ที่ยากจะตัดสินใจ เฉลยแล้วดูว่าใครอยู่ฝั่งไหน เถียงกันได้เต็มที่ (15 วินาที)',
+  truth:'สุ่มคนหนึ่งมาเล่าเรื่องของตัวเอง เพื่อนโหวตว่า จริง หรือ มั่ว แล้วคนเล่าเฉลย (20 วินาที)',
+  quick:'สุ่มคนหนึ่งมาตอบโจทย์ให้ครบภายใน 5 วินาที เพื่อน ๆ ช่วยกันตัดสินว่าทำทันไหม',
+  mission:'ทุกคนเห็นภารกิจพร้อมกัน ทำให้เสร็จก่อนหมดเวลา 30 วินาที ไม่มีการโหวต'}
 function Bar({label,n,total,note}:{label:string;n:number;total:number;note?:string}){return(
   <div><div className="flex justify-between"><span>{label}</span><b>{n}</b></div>
   <div className="h-3 rounded bg-white/10"><div className="h-3 rounded bg-gradient-to-r from-purple-500 to-pink-500 transition-all" style={{width:`${total?n/total*100:0}%`}}/></div>
@@ -85,7 +94,7 @@ export default function Room(){
       {host?<div className="space-y-2">
         <h2 className="font-bold text-center">เลือกเกม</h2>
         <ul className="grid grid-cols-2 gap-2">{GAMES.map(([id,ic,t])=><li key={id}><button aria-pressed={game===id} onClick={()=>setGame(id)} className={`card w-full py-4 ${game===id?'border-pink-400 shadow-[0_0_16px_#ec489966]':''}`}><div className="text-3xl">{ic}</div><div className="text-sm">{t}</div></button></li>)}</ul>
-        {game==='odd'&&<p className="text-center text-sm text-white/60">ทุกคนได้คำลับบนมือถือ ต้อง 3 คนขึ้นไป หาตัวปลอมให้เจอ</p>}
+        <section className="card text-sm" aria-live="polite"><b>{GAMES.find(g=>g[0]===game)?.[1]} {gname}</b><p className="text-white/70 mt-1">{DESC[game]}</p></section>
         {game!=='odd'&&<button className="btn alt" onClick={()=>{const t=prompt(`เพิ่มคำถามให้เกม “${gname}”\n${HINT[game]}`);if(t)call('add_custom_question',{p_code:code,p_text:t,p_game:game})}}>+ เพิ่มคำถามให้เกม “{gname}”</button>}
         <button className="btn" disabled={ps.length<(game==='odd'?3:2)} onClick={()=>call('start_game',{p_code:code,p_game:game})}>🎲 เริ่มเกม</button>
         <button className="btn alt" onClick={()=>confirm('ปิดห้อง?')&&call('close_room',{p_code:code})}>ปิดห้อง</button></div>
