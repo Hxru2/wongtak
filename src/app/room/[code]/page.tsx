@@ -11,7 +11,7 @@ type V={voter_id:string;target_player_id:string|null;choice:string|null}
 type R={id:string;status:string;host_id:string}
 type Sec={player_id:string;word:string;is_odd:boolean}
 const COL=['bg-purple-500','bg-pink-500','bg-orange-500','bg-cyan-500','bg-emerald-500','bg-yellow-500']
-const GAMES=[['cards','🃏','ไพ่ปาร์ตี้ 52 ใบ'],['taboo','🙊','ใบ้คำห้ามพูด'],['roulette','🎰','รูเล็ตต์ลงโทษ'],['quiz-th','🧩','Quiz (ไทย)'],['quiz-en','🌍','Quiz (English)'],['odd','🕵️','ตัวปลอม'],['sync','🧠','คิดตรงกัน'],['most-likely','😂','ใครมีโอกาสมากที่สุด'],['never','🙋','ใครเคย…'],['either','⚖️','เลือกข้าง'],['truth','🤥','จริงหรือมั่ว'],['quick','⏱️','5 วิ ตอบให้ทัน'],['mission','🎡','สุ่มภารกิจ']]
+const GAMES=[['king','👑','พระราชา'],['cards','🃏','ไพ่ปาร์ตี้ 52 ใบ'],['taboo','🙊','ใบ้คำห้ามพูด'],['roulette','🎰','รูเล็ตต์ลงโทษ'],['quiz-th','🧩','Quiz (ไทย)'],['quiz-en','🌍','Quiz (English)'],['odd','🕵️','ตัวปลอม'],['sync','🧠','คิดตรงกัน'],['most-likely','😂','ใครมีโอกาสมากที่สุด'],['never','🙋','ใครเคย…'],['either','⚖️','เลือกข้าง'],['truth','🤥','จริงหรือมั่ว'],['quick','⏱️','5 วิ ตอบให้ทัน'],['mission','🎡','สุ่มภารกิจ']]
 const CARD_RULES:Record<string,[string,string]>={
   A:['A • ทุกคนชูมือ','ทุกคนชูมือขึ้นพร้อมกัน คนที่ชูช้าที่สุดโดนลงโทษ'],
   '2':['2 • ชี้เลย','คนเปิดไพ่เลือกชี้เพื่อน 1 คนให้โดนลงโทษ'],
@@ -28,6 +28,7 @@ const CARD_RULES:Record<string,[string,string]>={
   K:['K • ราชาสั่งการ','คนเปิดไพ่สั่งภารกิจสั้น ๆ ให้เพื่อน 1 คนทำ']}
 const HINT:Record<string,string>={either:'พิมพ์สองตัวเลือก คั่นด้วย | เช่น กินเผ็ด|กินหวาน',sync:'พิมพ์คำถามตามด้วย 4 ตัวเลือก คั่นด้วย | เช่น ไปเที่ยวไหน|ทะเล|ภูเขา|ต่างประเทศ|อยู่บ้าน',never:'พิมพ์ต่อจาก "ใครเคย" เช่น แอบดูโทรศัพท์คนอื่น',truth:'พิมพ์เรื่องที่ให้ผู้เล่นบอก เช่น เคยหลับในโรงหนัง',quick:'พิมพ์โจทย์ เช่น บอกชื่อสัตว์ 3 ชนิด',mission:'พิมพ์ภารกิจ เช่น เต้นท่าอะไรก็ได้ 10 วินาที','most-likely':'พิมพ์ในรูป ใครมีโอกาส…?'}
 const DESC:Record<string,string>={
+  king:'ทุกคนกดจั่วไพ่จากสำรับเดียวกันบนมือถือตัวเอง (เห็นเฉพาะไพ่ตัวเองก่อน) แล้วเปิดพร้อมกัน ใครแต้มสูงสุดได้เป็น 👑 พระราชา ออกคำสั่งให้ใครในวงก็ได้ ให้ทำภารกิจหรือดื่ม (ไม่สบายใจจะเปลี่ยนเป็นดื่มน้ำก็ได้)',
   cards:'สำรับไพ่จริง 52 ใบ ผลัดกันกดเปิดไพ่ทีละใบ แต่ละใบมีกติกาสนุก ๆ ให้ทำทั้งวง ไพ่ที่เปิดแล้วไม่กลับเข้ามาสุ่มอีกจนกว่า Host จะเริ่มสำรับใหม่ (ลงโทษจะดื่มน้ำหรือทำภารกิจเล็ก ๆ ตกลงกันในวง)',
   taboo:'สุ่มคนหนึ่งมาใบ้คำที่เห็นบนจอให้เพื่อนทายภายใน 60 วินาที โดยห้ามพูดคำต้องห้ามที่ขึ้นใต้คำนั้น! เพื่อนช่วยกันทายด้วยปาก ถ้าคนใบ้หลุดพูดคำห้าม เพื่อนกดปุ่ม 🚨 ได้ คะแนน = ทายถูก − โดนบัซเซอร์',
   roulette:'ทุกคนกดปุ่มบนจอตัวเองพร้อมกัน แล้วระบบจะสุ่มคัดออกทีละคนจนเหลือคนสุดท้าย คนนั้นต้องโดนบทลงโทษ! ใครไม่กดทัน 15 วินาที = โดนเลย',
@@ -50,7 +51,7 @@ export default function Room(){
   const [uid,setUid]=useState('');const [room,setRoom]=useState<R|null>(null);const [ps,setPs]=useState<P[]>([])
   const [s,setS]=useState<S|null>(null);const [vs,setVs]=useState<V[]>([]);const [sec,setSec]=useState<Sec[]>([]);const [ans,setAns]=useState<number|null>(null)
   const [now,setNow]=useState(Date.now());const [qr,setQr]=useState(false);const [off,setOff]=useState(false);const [err,setErr]=useState('')
-  const [game,setGame]=useState('cards');const [skew,setSkew]=useState(0);const [cards,setCards]=useState<Card[]>([]);const [deck,setDeck]=useState<Deck[]>([])
+  const [game,setGame]=useState('king');const [skew,setSkew]=useState(0);const [cards,setCards]=useState<Card[]>([]);const [deck,setDeck]=useState<Deck[]>([]);const [peek,setPeek]=useState(false);const [cmd,setCmd]=useState('');const [tgt,setTgt]=useState('ALL')
   const load=useCallback(async()=>{
     const id=await ensureAuth();setUid(id)
     const {data:r}=await supabase.from('rooms').select('id,status,host_id').eq('code',code).maybeSingle()
@@ -64,7 +65,7 @@ export default function Room(){
       if(g.data.game_type==='odd'||g.data.game_type==='roulette'){const k=await supabase.from('game_secrets').select('player_id,word,is_odd').eq('session_id',g.data.id);setSec(k.data||[])}else setSec([])
       if(g.data.game_type==='quiz'){const a=await supabase.from('game_answers').select('correct').eq('session_id',g.data.id).maybeSingle();setAns(a.data?a.data.correct:null)}else setAns(null)
     if(g.data.game_type==='taboo'){const c=await supabase.from('taboo_cards').select('idx,target,forbidden,result').eq('session_id',g.data.id).order('idx');setCards(c.data||[])}else setCards([])
-      if(g.data.game_type==='cards'){const d=await supabase.from('card_deck').select('pos,face,suit,drawn_by').eq('session_id',g.data.id).not('drawn_at','is',null).order('pos');setDeck(d.data||[])}else setDeck([])
+      if(g.data.game_type==='cards'){const d=await supabase.from('card_deck').select('pos,face,suit,drawn_by').eq('session_id',g.data.id).not('drawn_at','is',null).order('pos');setDeck(d.data||[])}else if(g.data.game_type==='king'){const d=await supabase.from('king_deck').select('pos,face,suit,drawn_by').eq('session_id',g.data.id).not('drawn_by','is',null);setDeck(d.data||[])}else setDeck([])
     }else{setVs([]);setSec([]);setAns(null);setCards([]);setDeck([])}
   },[code,router])
   useEffect(()=>{load()
@@ -79,7 +80,7 @@ export default function Room(){
   const gt=s?.game_type
   const left=s?Math.max(0,Math.ceil((new Date(s.ends_at).getTime()-(now+skew))/1000)):0
   const myVote=vs.find(v=>v.voter_id===me?.id)
-  useEffect(()=>{if(s?.status==='voting'&&s.game_type!=='roulette'&&(left===0
+  useEffect(()=>{if(s?.status==='voting'&&!['roulette','king'].includes(s.game_type)&&(left===0
     ||(['most-likely','never','either','odd','sync','quiz'].includes(s.game_type)&&ps.length>1&&vs.length>=ps.length)
     ||(s.game_type==='truth'&&ps.length>1&&vs.length>=ps.length-1)))
     supabase.rpc('finish_round',{p_session:s.id}).then(load)},[left,vs.length,ps.length,s,load])
@@ -89,8 +90,14 @@ export default function Room(){
   useEffect(()=>{if(gt!=='taboo'||!s||s.status!=='voting'||left>0)return
     const id=s.id;const t=setInterval(()=>{supabase.rpc('finish_round',{p_session:id}).then(r=>{if(!r.error)load()})},1500)
     return()=>clearInterval(t)},[gt,s,left,load])
+  useEffect(()=>{if(gt!=='king'||!s||s.status!=='voting')return
+    const cnt=Number(s.question_text)||0
+    if(left>0&&!(ps.length>1&&cnt>=ps.length))return
+    const id=s.id;const run=()=>supabase.rpc('finish_king',{p_session:id}).then(r=>{if(!r.error)load()});run()
+    const t=setInterval(run,1500)
+    return()=>clearInterval(t)},[gt,s,left,ps.length,load])
   async function call(fn:string,args:object){const {error}=await supabase.rpc(fn,args);setErr(error?error.message:'');load()}
-  const go=(g:string)=>g==='cards'?call('start_cards',{p_code:code}):g==='taboo'?call('start_taboo',{p_code:code}):g==='roulette'?call('start_roulette',{p_code:code}):g.startsWith('quiz')?call('start_quiz',{p_code:code,p_lang:g.includes('-')?g.split('-')[1]:null}):call('start_game',{p_code:code,p_game:g})
+  const go=(g:string)=>g==='king'?call('start_king',{p_code:code}):g==='cards'?call('start_cards',{p_code:code}):g==='taboo'?call('start_taboo',{p_code:code}):g==='roulette'?call('start_roulette',{p_code:code}):g.startsWith('quiz')?call('start_quiz',{p_code:code,p_lang:g.includes('-')?g.split('-')[1]:null}):call('start_game',{p_code:code,p_game:g})
   if(!room)return <main className="p-10 text-center text-xl">กำลังโหลด…</main>
   if(room.status==='closed')return <main className="p-10 text-center space-y-4"><div className="text-6xl">⌛</div><p>ห้องนี้ปิดแล้ว</p><a className="btn" href="/">กลับหน้าแรก</a></main>
   const link=typeof window!=='undefined'?`${location.origin}/join?room=${code}`:''
@@ -103,16 +110,23 @@ export default function Room(){
   const myWord=sec.find(k=>k.player_id===me?.id)?.word
   const oddK=sec.find(k=>k.is_odd);const oddP=ps.find(p=>p.id===oddK?.player_id)
   const majWord=sec.find(k=>!k.is_odd)?.word
-  const title=!s?'':gt==='cards'?'🃏 ไพ่ปาร์ตี้':gt==='taboo'?`🙊 ${nm} กำลังใบ้!`:gt==='roulette'?`🎰 คนสุดท้ายต้อง: ${s.question_text}`:gt==='truth'?`${nm} บอกว่า “${s.question_text}” จริงหรือมั่ว?`
+  const title=!s?'':gt==='king'?'👑 พระราชา':gt==='cards'?'🃏 ไพ่ปาร์ตี้':gt==='taboo'?`🙊 ${nm} กำลังใบ้!`:gt==='roulette'?`🎰 คนสุดท้ายต้อง: ${s.question_text}`:gt==='truth'?`${nm} บอกว่า “${s.question_text}” จริงหรือมั่ว?`
     :gt==='quick'?`${nm} ต้อง${s.question_text} ใน 5 วิ!`:gt==='mission'?s.question_text
     :gt==='never'?`ใครเคย ${s.question_text}?`:gt==='either'?'เลือกข้าง!':(gt==='sync'||gt==='quiz')?oa:gt==='odd'?`หมวด: ${s.question_text}`:`“${s.question_text}”`
   const gname=GAMES.find(g=>g[0]===game)?.[2]
-  const noCustom=game==='odd'||game==='taboo'||game==='cards'||game==='roulette'||game.startsWith('quiz')
+  const noCustom=game==='odd'||game==='taboo'||game==='cards'||game==='king'||game==='roulette'||game.startsWith('quiz')
   const pick=(c:string)=>call('cast_choice',{p_session:s?.id,p_choice:c})
   const nextGame=gt==='quiz'?(game.startsWith('quiz')?game:'quiz'):(gt??'')
   const remain=52-deck.length;const last=deck[deck.length-1];const turnP=ps[deck.length%Math.max(ps.length,1)]
   const canDraw=!!me&&remain>0&&(me.id===turnP?.id||host)
   const redS=(x:string)=>x==='♥'||x==='♦'
+  const valOf=(f:string)=>f==='A'?14:f==='K'?13:f==='Q'?12:f==='J'?11:Number(f)
+  const sRank=(x:string)=>x==='♠'?4:x==='♥'?3:x==='♦'?2:1
+  const myCard=deck.find(c=>c.drawn_by===me?.id);const kingCnt=Number(s?.question_text)||0
+  const hands=[...deck].sort((a,b)=>valOf(b.face)-valOf(a.face)||sRank(b.suit)-sRank(a.suit))
+  const kingP=ps.find(x=>x.id===s?.subject_id);const iKing=!!me&&me.id===s?.subject_id
+  const cmdRaw=s?.question_text??'';const hasCmd=cmdRaw.includes('|')
+  const cmdTarget=hasCmd?cmdRaw.slice(0,cmdRaw.indexOf('|')):'';const cmdText=hasCmd?cmdRaw.slice(cmdRaw.indexOf('|')+1):''
   const iGive=me?.id===s?.subject_id;const cur=cards.find(c=>c.result===null)
   const ordered=[...sec].sort((a,b)=>Number(a.word)-Number(b.word));const nR=ordered.length
   const endMs=s?.ended_at?new Date(s.ended_at).getTime():0
@@ -148,7 +162,12 @@ export default function Room(){
       {s.status==='voting'?<>
         {gt!=='cards'&&<div className={`mx-auto w-20 h-20 rounded-full grid place-items-center text-3xl font-bold border-4 ${left<=5?'border-red-500 animate-pulse':'border-pink-500'}`} aria-live="polite">{left}</div>}
         {gt==='odd'&&<div className="card text-center"><div className="text-sm text-white/60">คำลับของคุณ (อย่าให้ใครเห็น!)</div><div className="text-4xl font-extrabold my-2">{myWord??'…'}</div><p className="text-sm text-white/60">ผลัดกันอธิบายคำนี้แบบไม่บอกตรง ๆ แล้วโหวตคนที่น่าสงสัยที่สุด</p></div>}
-        {gt==='cards'?<div className="space-y-3">
+        {gt==='king'?<div className="space-y-3">
+          <p className="text-center text-lg">👑 ใครไพ่แต้มสูงสุดได้เป็นพระราชา!</p>
+          {myCard?<button className="card w-full text-center py-6" aria-pressed={peek} onClick={()=>setPeek(v=>!v)}>{peek?<span className={`text-7xl font-extrabold ${redS(myCard.suit)?'text-red-400':'text-white'}`}>{myCard.face}{myCard.suit}</span>:<span className="text-6xl">🂠<br/><span className="text-sm text-white/60">แตะเพื่อดูไพ่ของคุณ (ปิดบังจากเพื่อนข้าง ๆ)</span></span>}</button>
+          :<button className="btn text-xl py-6" onClick={()=>call('draw_king',{p_session:s.id})}>🃏 จั่วไพ่</button>}
+          <p className="text-center text-sm text-white/60">จั่วแล้ว {kingCnt}/{ps.length} คน • ไพ่ทุกใบมาจากสำรับเดียวกัน</p></div>
+        :gt==='cards'?<div className="space-y-3">
           <p className="text-center text-sm text-white/60">เหลือในสำรับ {remain} / 52 ใบ</p>
           {last?<div className="card text-center border-pink-400"><div className={`text-7xl font-extrabold ${redS(last.suit)?'text-red-400':'text-white'}`}>{last.face}{last.suit}</div><div className="mt-2 font-bold">{CARD_RULES[last.face]?.[0]}</div><p className="text-white/70 text-sm mt-1">{CARD_RULES[last.face]?.[1]}</p><p className="text-xs text-white/50 mt-2">เปิดโดย {ps.find(x=>x.id===last.drawn_by)?.nickname??'?'}</p></div>:<div className="card text-center text-white/60">🂠 ยังไม่ได้เปิดไพ่ใบแรก</div>}
           {remain>0?(canDraw?<button className="btn text-xl py-6" onClick={()=>call('draw_card',{p_session:s.id,p_expected:deck.length})}>🃏 เปิดไพ่</button>:<p className="text-center text-lg">รอ {turnP?.nickname??'...'} เปิดไพ่...</p>):<p className="text-center text-lg font-bold">หมดสำรับแล้ว! 🎉</p>}
@@ -172,6 +191,17 @@ export default function Room(){
         :(gt==='sync'||gt==='quiz')?<div className="space-y-2"><p className="text-center text-sm text-white/60">{gt==='quiz'?'เลือกคำตอบที่ถูกต้อง':'เลือกให้ตรงกับที่เพื่อนส่วนใหญ่จะเลือก'}</p>{opts.map((o,i)=><button key={i} className={i===0?'btn':'btn alt'} onClick={()=>pick(String(i))}>{'ABCD'[i]}. {o}</button>)}</div>
         :playerGrid}</>
       :<section className="space-y-3">
+        {gt==='king'&&<>
+          <div className="text-center text-6xl">👑</div>
+          <h2 className="text-center text-2xl font-bold">{kingP?`${kingP.nickname} คือพระราชา!`:'ไม่มีใครจั่วไพ่'}</h2>
+          <ul className="card space-y-1 text-sm">{hands.map((c,i)=><li key={c.pos} className={`flex justify-between ${i===0?'font-bold text-pink-300':''}`}><span>{i===0&&'👑 '}{ps.find(x=>x.id===c.drawn_by)?.nickname??'?'}</span><span className={redS(c.suit)?'text-red-400':''}>{c.face}{c.suit}</span></li>)}</ul>
+          {kingP&&(hasCmd
+            ?<div className="card text-center border-pink-400"><div className="text-sm text-white/60">พระราชามีบัญชา</div><div className="font-bold mt-1">ถึง {cmdTarget==='ALL'?'ทุกคน':(ps.find(x=>x.id===cmdTarget)?.nickname??'?')}</div><div className="text-xl mt-1">{cmdText}</div><p className="text-xs text-white/50 mt-2">ทำตามหรือรับบทลงโทษ (ดื่มน้ำ/เครื่องดื่ม หรือภารกิจเล็ก ๆ) • ไม่สบายใจจะข้ามก็ได้ ไม่ต้องฝืน</p></div>
+            :iKing?<div className="card space-y-2"><h3 className="font-bold text-center">ออกคำสั่งของคุณ</h3>
+              <select className="inp" aria-label="เลือกผู้รับคำสั่ง" value={tgt} onChange={e=>setTgt(e.target.value)}><option value="ALL">ทุกคน</option>{ps.filter(x=>x.id!==me?.id).map(x=><option key={x.id} value={x.id}>{x.nickname}</option>)}</select>
+              <input className="inp" maxLength={200} aria-label="คำสั่ง" placeholder="เช่น ร้องเพลงท่อนฮุก หรือ ดื่ม 1 จิบ" value={cmd} onChange={e=>setCmd(e.target.value)}/>
+              <button className="btn" disabled={!cmd.trim()} onClick={()=>{call('king_command',{p_session:s.id,p_target:tgt==='ALL'?null:tgt,p_text:cmd});setCmd('')}}>👑 ประกาศบัญชา</button></div>
+            :<p className="text-center text-white/60">รอ {kingP.nickname} ออกคำสั่ง...</p>)}</>}
         {gt==='taboo'&&<>
           <div className="text-center text-5xl">🙊</div>
           <h2 className="text-center text-2xl font-bold">{nm} ใบ้ได้ {s.ok_count-s.buzz_count} คะแนน</h2>
