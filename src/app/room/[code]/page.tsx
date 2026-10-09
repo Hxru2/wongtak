@@ -4,14 +4,15 @@ import {useParams,useRouter} from 'next/navigation'
 import {QRCodeSVG} from 'qrcode.react'
 import {supabase,ensureAuth} from '@/lib/supabase'
 type P={id:string;user_id:string;nickname:string;is_host:boolean;is_connected:boolean}
-type S={id:string;question_text:string;round:number;status:string;ends_at:string;game_type:string;subject_id:string|null}
+type S={id:string;question_text:string;round:number;status:string;ends_at:string;game_type:string;subject_id:string|null;ended_at:string|null}
 type V={voter_id:string;target_player_id:string|null;choice:string|null}
 type R={id:string;status:string;host_id:string}
 type Sec={player_id:string;word:string;is_odd:boolean}
 const COL=['bg-purple-500','bg-pink-500','bg-orange-500','bg-cyan-500','bg-emerald-500','bg-yellow-500']
-const GAMES=[['quiz-th','🧩','Quiz (ไทย)'],['quiz-en','🌍','Quiz (English)'],['odd','🕵️','ตัวปลอม'],['sync','🧠','คิดตรงกัน'],['most-likely','😂','ใครมีโอกาสมากที่สุด'],['never','🙋','ใครเคย…'],['either','⚖️','เลือกข้าง'],['truth','🤥','จริงหรือมั่ว'],['quick','⏱️','5 วิ ตอบให้ทัน'],['mission','🎡','สุ่มภารกิจ']]
+const GAMES=[['roulette','🎰','รูเล็ตต์ลงโทษ'],['quiz-th','🧩','Quiz (ไทย)'],['quiz-en','🌍','Quiz (English)'],['odd','🕵️','ตัวปลอม'],['sync','🧠','คิดตรงกัน'],['most-likely','😂','ใครมีโอกาสมากที่สุด'],['never','🙋','ใครเคย…'],['either','⚖️','เลือกข้าง'],['truth','🤥','จริงหรือมั่ว'],['quick','⏱️','5 วิ ตอบให้ทัน'],['mission','🎡','สุ่มภารกิจ']]
 const HINT:Record<string,string>={either:'พิมพ์สองตัวเลือก คั่นด้วย | เช่น กินเผ็ด|กินหวาน',sync:'พิมพ์คำถามตามด้วย 4 ตัวเลือก คั่นด้วย | เช่น ไปเที่ยวไหน|ทะเล|ภูเขา|ต่างประเทศ|อยู่บ้าน',never:'พิมพ์ต่อจาก "ใครเคย" เช่น แอบดูโทรศัพท์คนอื่น',truth:'พิมพ์เรื่องที่ให้ผู้เล่นบอก เช่น เคยหลับในโรงหนัง',quick:'พิมพ์โจทย์ เช่น บอกชื่อสัตว์ 3 ชนิด',mission:'พิมพ์ภารกิจ เช่น เต้นท่าอะไรก็ได้ 10 วินาที','most-likely':'พิมพ์ในรูป ใครมีโอกาส…?'}
 const DESC:Record<string,string>={
+  roulette:'ทุกคนกดปุ่มบนจอตัวเองพร้อมกัน แล้วระบบจะสุ่มคัดออกทีละคนจนเหลือคนสุดท้าย คนนั้นต้องโดนบทลงโทษ! ใครไม่กดทัน 15 วินาที = โดนเลย',
   'quiz-th':'ตอบคำถามความรู้ทั่วไปภาษาไทย 4 ตัวเลือก ใครตอบถูกบ้างเฉลยพร้อมกัน (25 วินาที)',
   'quiz-en':'คำถามความรู้ภาษาอังกฤษจาก Open Trivia DB ที่อัปเดตเรื่อย ๆ 4 ตัวเลือก (25 วินาที)',
   odd:'ทุกคนได้คำลับบนมือถือ ทุกคนได้คำเดียวกันยกเว้น 1 คนที่ได้คำคล้ายกัน ผลัดกันอธิบายคำโดยไม่บอกตรง ๆ แล้วโหวตหาตัวปลอม (ต้อง 3 คนขึ้นไป • 90 วินาที)',
@@ -42,7 +43,7 @@ export default function Room(){
     setPs((p.data||[]).filter((x:P)=>x.is_connected));setS(g.data)
     if(g.data){
       const v=await supabase.from('votes').select('voter_id,target_player_id,choice').eq('game_session_id',g.data.id);setVs(v.data||[])
-      if(g.data.game_type==='odd'){const k=await supabase.from('game_secrets').select('player_id,word,is_odd').eq('session_id',g.data.id);setSec(k.data||[])}else setSec([])
+      if(g.data.game_type==='odd'||g.data.game_type==='roulette'){const k=await supabase.from('game_secrets').select('player_id,word,is_odd').eq('session_id',g.data.id);setSec(k.data||[])}else setSec([])
       if(g.data.game_type==='quiz'){const a=await supabase.from('game_answers').select('correct').eq('session_id',g.data.id).maybeSingle();setAns(a.data?a.data.correct:null)}else setAns(null)
     }else{setVs([]);setSec([]);setAns(null)}
   },[code,router])
@@ -58,12 +59,15 @@ export default function Room(){
   const gt=s?.game_type
   const left=s?Math.max(0,Math.ceil((new Date(s.ends_at).getTime()-(now+skew))/1000)):0
   const myVote=vs.find(v=>v.voter_id===me?.id)
-  useEffect(()=>{if(s?.status==='voting'&&(left===0
+  useEffect(()=>{if(s?.status==='voting'&&s.game_type!=='roulette'&&(left===0
     ||(['most-likely','never','either','odd','sync','quiz'].includes(s.game_type)&&ps.length>1&&vs.length>=ps.length)
     ||(s.game_type==='truth'&&ps.length>1&&vs.length>=ps.length-1)))
     supabase.rpc('finish_round',{p_session:s.id}).then(load)},[left,vs.length,ps.length,s,load])
+  useEffect(()=>{if(gt!=='roulette'||!s||s.status!=='voting')return
+    const id=s.id;const t=setInterval(()=>{supabase.rpc('finish_roulette',{p_session:id}).then(r=>{if(!r.error)load()})},1500)
+    return()=>clearInterval(t)},[gt,s,load])
   async function call(fn:string,args:object){const {error}=await supabase.rpc(fn,args);setErr(error?error.message:'');load()}
-  const go=(g:string)=>g.startsWith('quiz')?call('start_quiz',{p_code:code,p_lang:g.includes('-')?g.split('-')[1]:null}):call('start_game',{p_code:code,p_game:g})
+  const go=(g:string)=>g==='roulette'?call('start_roulette',{p_code:code}):g.startsWith('quiz')?call('start_quiz',{p_code:code,p_lang:g.includes('-')?g.split('-')[1]:null}):call('start_game',{p_code:code,p_game:g})
   if(!room)return <main className="p-10 text-center text-xl">กำลังโหลด…</main>
   if(room.status==='closed')return <main className="p-10 text-center space-y-4"><div className="text-6xl">⌛</div><p>ห้องนี้ปิดแล้ว</p><a className="btn" href="/">กลับหน้าแรก</a></main>
   const link=typeof window!=='undefined'?`${location.origin}/join?room=${code}`:''
@@ -76,13 +80,18 @@ export default function Room(){
   const myWord=sec.find(k=>k.player_id===me?.id)?.word
   const oddK=sec.find(k=>k.is_odd);const oddP=ps.find(p=>p.id===oddK?.player_id)
   const majWord=sec.find(k=>!k.is_odd)?.word
-  const title=!s?'':gt==='truth'?`${nm} บอกว่า “${s.question_text}” จริงหรือมั่ว?`
+  const title=!s?'':gt==='roulette'?`🎰 คนสุดท้ายต้อง: ${s.question_text}`:gt==='truth'?`${nm} บอกว่า “${s.question_text}” จริงหรือมั่ว?`
     :gt==='quick'?`${nm} ต้อง${s.question_text} ใน 5 วิ!`:gt==='mission'?s.question_text
     :gt==='never'?`ใครเคย ${s.question_text}?`:gt==='either'?'เลือกข้าง!':(gt==='sync'||gt==='quiz')?oa:gt==='odd'?`หมวด: ${s.question_text}`:`“${s.question_text}”`
   const gname=GAMES.find(g=>g[0]===game)?.[2]
-  const noCustom=game==='odd'||game.startsWith('quiz')
+  const noCustom=game==='odd'||game==='roulette'||game.startsWith('quiz')
   const pick=(c:string)=>call('cast_choice',{p_session:s?.id,p_choice:c})
   const nextGame=gt==='quiz'?(game.startsWith('quiz')?game:'quiz'):(gt??'')
+  const ordered=[...sec].sort((a,b)=>Number(a.word)-Number(b.word));const nR=ordered.length
+  const endMs=s?.ended_at?new Date(s.ended_at).getTime():0
+  const k=Math.min(Math.max(nR-1,0),Math.max(0,Math.floor((now+skew-endMs)/2000)))
+  const done=nR>0&&k>=nR-1
+  const loserName=ps.find(x=>x.id===ordered.find(o=>o.is_odd)?.player_id)?.nickname??'?'
   const playerGrid=<ul className="grid grid-cols-2 gap-3">{ps.filter(p=>p.id!==me?.id).map((p,i)=><li key={p.id}>
     <button className="card w-full py-6 hover:border-pink-400" onClick={()=>call('cast_vote',{p_session:s?.id,p_target:p.id})}>
     <span className={`block mx-auto w-12 h-12 rounded-full leading-[3rem] font-bold ${COL[i%COL.length]}`}>{p.nickname[0]}</span>{p.nickname}</button></li>)}</ul>
@@ -112,7 +121,8 @@ export default function Room(){
       {s.status==='voting'?<>
         <div className={`mx-auto w-20 h-20 rounded-full grid place-items-center text-3xl font-bold border-4 ${left<=5?'border-red-500 animate-pulse':'border-pink-500'}`} aria-live="polite">{left}</div>
         {gt==='odd'&&<div className="card text-center"><div className="text-sm text-white/60">คำลับของคุณ (อย่าให้ใครเห็น!)</div><div className="text-4xl font-extrabold my-2">{myWord??'…'}</div><p className="text-sm text-white/60">ผลัดกันอธิบายคำนี้แบบไม่บอกตรง ๆ แล้วโหวตคนที่น่าสงสัยที่สุด</p></div>}
-        {gt==='mission'?<p className="text-center text-white/60">ทำภารกิจให้ทันเวลา!</p>
+        {gt==='roulette'?(myVote?<p className="text-center text-lg">✓ กดแล้ว<br/><span className="text-white/60 text-sm">รอเพื่อนกดให้ครบ...</span></p>:<div className="space-y-2"><button className="btn text-3xl py-10 animate-pulse" onClick={()=>call('tap_roulette',{p_session:s.id})}>👆 กดเลย!</button><p className="text-center text-sm text-white/60">ใครไม่กดทัน = โดนเลย!</p></div>)
+        :gt==='mission'?<p className="text-center text-white/60">ทำภารกิจให้ทันเวลา!</p>
         :gt==='quick'?<p className="text-center text-lg">⏱️ {nm} กำลังตอบ...</p>
         :gt==='truth'&&me?.id===s.subject_id?<p className="text-center text-lg">รอเพื่อนโหวต... ({vs.length}/{ps.length-1})</p>
         :myVote?<p className="text-center text-lg">✓ เลือกแล้ว<br/><span className="text-white/60 text-sm">รอผู้เล่นคนอื่น... ({vs.length}/{gt==='truth'?ps.length-1:ps.length})</span></p>
@@ -122,6 +132,12 @@ export default function Room(){
         :(gt==='sync'||gt==='quiz')?<div className="space-y-2"><p className="text-center text-sm text-white/60">{gt==='quiz'?'เลือกคำตอบที่ถูกต้อง':'เลือกให้ตรงกับที่เพื่อนส่วนใหญ่จะเลือก'}</p>{opts.map((o,i)=><button key={i} className={i===0?'btn':'btn alt'} onClick={()=>pick(String(i))}>{'ABCD'[i]}. {o}</button>)}</div>
         :playerGrid}</>
       :<section className="space-y-3">
+        {gt==='roulette'&&<>
+          <div className="text-center text-5xl">{done?'💀':'🎰'}</div>
+          <h2 className="text-center text-xl font-bold">{nR===0?'กำลังสุ่ม...':done?`${loserName} โดน!`:'กำลังสุ่มคัดออก...'}</h2>
+          <ul className="grid grid-cols-2 gap-2">{ordered.map(o=>{const pl=ps.find(x=>x.id===o.player_id);const out=Number(o.word)<k;const lose=done&&o.is_odd;const tapped=vs.some(v=>v.voter_id===o.player_id)
+            return <li key={o.player_id} className={`card text-center transition-all ${lose?'border-red-500 shadow-[0_0_24px_#ef4444aa] scale-105':''} ${out?'opacity-30 line-through':''}`}>{pl?.nickname??'?'}{!tapped&&' 🐢'}{out&&' ❌'}{lose&&' 💀'}</li>})}</ul>
+          {done&&<div className="card text-center"><div className="text-sm text-white/60">บทลงโทษ</div><div className="text-xl font-bold">{s.question_text}</div></div>}</>}
         {gt==='quiz'&&<>
           <div className="text-center text-5xl">🧩</div>
           {opts.map((o,i)=><Bar key={i} label={`${'ABCD'[i]}. ${o}${ans===i?' ✅':''}`} n={vs.filter(v=>v.choice===String(i)).length} total={ps.length} note={names(String(i))}/>)}
@@ -149,7 +165,7 @@ export default function Room(){
         {gt==='truth'&&<div className="text-center space-y-1"><div className="text-5xl">🤥</div><h2 className="text-2xl font-bold">{yes>no?'เพื่อนเชื่อ ✅':yes<no?'เพื่อนไม่เชื่อ ❌':'เสมอ!'}</h2><p>จริง {yes} • มั่ว {no}</p><p className="text-white/60">{nm} เฉลยหน่อย!</p></div>}
         {gt==='quick'&&<div className="text-center space-y-1"><div className="text-5xl">⏱️</div><h2 className="text-2xl font-bold">หมดเวลา!</h2><p className="text-white/60">{nm} ทำทันไหม? เพื่อน ๆ ช่วยกันตัดสิน</p></div>}
         {gt==='mission'&&<div className="text-center space-y-1"><div className="text-5xl">🎡</div><h2 className="text-2xl font-bold">หมดเวลา!</h2><p className="text-white/60">ทำภารกิจเสร็จกันหรือยัง?</p></div>}
-        {host?<div className="space-y-2"><button className="btn" onClick={()=>go(nextGame)}>🎲 เล่นรอบต่อไป</button>
+        {(gt==='roulette'&&!done)?null:host?<div className="space-y-2"><button className="btn" onClick={()=>go(nextGame)}>🎲 เล่นรอบต่อไป</button>
           <button className="btn alt" onClick={()=>call('back_to_lobby',{p_code:code})}>🏠 กลับ Lobby</button></div>:<p className="text-center text-white/60">รอ Host...</p>}</section>}</>}
     {qr&&<div role="dialog" aria-modal className="fixed inset-0 bg-black/80 grid place-items-center p-6 z-10" onClick={()=>setQr(false)}>
       <div className="card text-center space-y-3" onClick={e=>e.stopPropagation()}><h2 className="font-bold">สแกนเพื่อเข้าห้อง</h2>
