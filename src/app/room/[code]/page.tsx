@@ -4,7 +4,7 @@ import {useParams,useRouter} from 'next/navigation'
 import {QRCodeSVG} from 'qrcode.react'
 import {supabase,ensureAuth} from '@/lib/supabase'
 type P={id:string;user_id:string;nickname:string;is_host:boolean;is_connected:boolean}
-type S={id:string;question_text:string;round:number;status:string;ends_at:string;game_type:string;subject_id:string|null;ended_at:string|null;ok_count:number;buzz_count:number}
+type S={id:string;question_text:string;round:number;status:string;ends_at:string;game_type:string;subject_id:string|null;ended_at:string|null;ok_count:number;buzz_count:number;votes_count:number}
 type Deck={pos:number;face:string;suit:string;drawn_by:string|null}
 type Card={idx:number;target:string;forbidden:string[];result:string|null}
 type V={voter_id:string;target_player_id:string|null;choice:string|null}
@@ -81,9 +81,9 @@ export default function Room(){
   const left=s?Math.max(0,Math.ceil((new Date(s.ends_at).getTime()-(now+skew))/1000)):0
   const myVote=vs.find(v=>v.voter_id===me?.id)
   useEffect(()=>{if(s?.status==='voting'&&!['roulette','king'].includes(s.game_type)&&(left===0
-    ||(['most-likely','never','either','odd','sync','quiz'].includes(s.game_type)&&ps.length>1&&vs.length>=ps.length)
-    ||(s.game_type==='truth'&&ps.length>1&&vs.length>=ps.length-1)))
-    supabase.rpc('finish_round',{p_session:s.id}).then(load)},[left,vs.length,ps.length,s,load])
+    ||(['most-likely','never','either','odd','sync','quiz'].includes(s.game_type)&&ps.length>1&&s.votes_count>=ps.length)
+    ||(s.game_type==='truth'&&ps.length>1&&s.votes_count>=ps.length-1)))
+    supabase.rpc('finish_round',{p_session:s.id}).then(load)},[left,ps.length,s,load])
   useEffect(()=>{if(gt!=='roulette'||!s||s.status!=='voting')return
     const id=s.id;const t=setInterval(()=>{supabase.rpc('finish_roulette',{p_session:id}).then(r=>{if(!r.error)load()})},1500)
     return()=>clearInterval(t)},[gt,s,load])
@@ -183,8 +183,8 @@ export default function Room(){
         :gt==='roulette'?(myVote?<p className="text-center text-lg">✓ กดแล้ว<br/><span className="text-white/60 text-sm">รอเพื่อนกดให้ครบ...</span></p>:<div className="space-y-2"><button className="btn text-3xl py-10 animate-pulse" onClick={()=>call('tap_roulette',{p_session:s.id})}>👆 กดเลย!</button><p className="text-center text-sm text-white/60">ใครไม่กดทัน = โดนเลย!</p></div>)
         :gt==='mission'?<p className="text-center text-white/60">ทำภารกิจให้ทันเวลา!</p>
         :gt==='quick'?<p className="text-center text-lg">⏱️ {nm} กำลังตอบ...</p>
-        :gt==='truth'&&me?.id===s.subject_id?<p className="text-center text-lg">รอเพื่อนโหวต... ({vs.length}/{ps.length-1})</p>
-        :myVote?<p className="text-center text-lg">✓ เลือกแล้ว<br/><span className="text-white/60 text-sm">รอผู้เล่นคนอื่น... ({vs.length}/{gt==='truth'?ps.length-1:ps.length})</span></p>
+        :gt==='truth'&&me?.id===s.subject_id?<p className="text-center text-lg">รอเพื่อนโหวต... ({s.votes_count}/{ps.length-1})</p>
+        :myVote?<p className="text-center text-lg">✓ เลือกแล้ว<br/><span className="text-white/60 text-sm">รอผู้เล่นคนอื่น... ({s.votes_count}/{gt==='truth'?ps.length-1:ps.length})</span></p>
         :gt==='truth'?<div className="grid grid-cols-2 gap-3"><button className="btn" onClick={()=>pick('true')}>✅ จริง</button><button className="btn alt" onClick={()=>pick('false')}>❌ มั่ว</button></div>
         :gt==='never'?<div className="grid grid-cols-2 gap-3"><button className="btn" onClick={()=>pick('true')}>🙋 เคย</button><button className="btn alt" onClick={()=>pick('false')}>🙅 ไม่เคย</button></div>
         :gt==='either'?<div className="space-y-3"><button className="btn" onClick={()=>pick('true')}>🅰️ {oa}</button><button className="btn alt" onClick={()=>pick('false')}>🅱️ {ob}</button></div>
