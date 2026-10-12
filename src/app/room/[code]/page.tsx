@@ -1,17 +1,21 @@
 'use client'
-import {useCallback,useEffect,useState} from 'react'
+import {Fragment,useCallback,useEffect,useState} from 'react'
 import {useParams,useRouter} from 'next/navigation'
 import {QRCodeSVG} from 'qrcode.react'
 import {supabase,ensureAuth} from '@/lib/supabase'
 type P={id:string;user_id:string;nickname:string;is_host:boolean;is_connected:boolean}
-type S={id:string;question_text:string;round:number;status:string;ends_at:string;game_type:string;subject_id:string|null;ended_at:string|null;ok_count:number;buzz_count:number;votes_count:number}
+type S={id:string;question_text:string;round:number;status:string;ends_at:string;game_type:string;subject_id:string|null;ended_at:string|null;ok_count:number;buzz_count:number;votes_count:number;phase:string|null;turn_id:string|null;last_shot:Shot|null}
 type Deck={pos:number;face:string;suit:string;drawn_by:string|null}
+type Shot={type:string;by?:string;target?:string;cell?:number;result?:string;size?:number;out?:boolean;n:number}
+type BP={player_id:string;seq:number;alive:boolean}
+type BShip={player_id:string;ship_idx:number;cells:number[]}
+type BHit={player_id:string;cell:number}
 type Card={idx:number;target:string;forbidden:string[];result:string|null}
 type V={voter_id:string;target_player_id:string|null;choice:string|null}
 type R={id:string;status:string;host_id:string}
 type Sec={player_id:string;word:string;is_odd:boolean}
 const COL=['bg-purple-500','bg-pink-500','bg-orange-500','bg-cyan-500','bg-emerald-500','bg-yellow-500']
-const GAMES=[['king','👑','พระราชา'],['cards','🃏','ไพ่ปาร์ตี้ 52 ใบ'],['taboo','🙊','ใบ้คำห้ามพูด'],['roulette','🎰','รูเล็ตต์ลงโทษ'],['quiz-th','🧩','Quiz (ไทย)'],['quiz-en','🌍','Quiz (English)'],['odd','🕵️','ตัวปลอม'],['sync','🧠','คิดตรงกัน'],['most-likely','😂','ใครมีโอกาสมากที่สุด'],['never','🙋','ใครเคย…'],['either','⚖️','เลือกข้าง'],['truth','🤥','จริงหรือมั่ว'],['quick','⏱️','5 วิ ตอบให้ทัน'],['mission','🎡','สุ่มภารกิจ']]
+const GAMES=[['battle','🚢','เรือรบ'],['king','👑','พระราชา'],['cards','🃏','ไพ่ปาร์ตี้ 52 ใบ'],['taboo','🙊','ใบ้คำห้ามพูด'],['roulette','🎰','รูเล็ตต์ลงโทษ'],['quiz-th','🧩','Quiz (ไทย)'],['quiz-en','🌍','Quiz (English)'],['odd','🕵️','ตัวปลอม'],['sync','🧠','คิดตรงกัน'],['most-likely','😂','ใครมีโอกาสมากที่สุด'],['never','🙋','ใครเคย…'],['either','⚖️','เลือกข้าง'],['truth','🤥','จริงหรือมั่ว'],['quick','⏱️','5 วิ ตอบให้ทัน'],['mission','🎡','สุ่มภารกิจ']]
 const CARD_RULES:Record<string,[string,string]>={
   A:['A • ทุกคนชูมือ','ทุกคนชูมือขึ้นพร้อมกัน คนที่ชูช้าที่สุดโดนลงโทษ'],
   '2':['2 • ชี้เลย','คนเปิดไพ่เลือกชี้เพื่อน 1 คนให้โดนลงโทษ'],
@@ -28,6 +32,7 @@ const CARD_RULES:Record<string,[string,string]>={
   K:['K • ราชาสั่งการ','คนเปิดไพ่สั่งภารกิจสั้น ๆ ให้เพื่อน 1 คนทำ']}
 const HINT:Record<string,string>={either:'พิมพ์สองตัวเลือก คั่นด้วย | เช่น กินเผ็ด|กินหวาน',sync:'พิมพ์คำถามตามด้วย 4 ตัวเลือก คั่นด้วย | เช่น ไปเที่ยวไหน|ทะเล|ภูเขา|ต่างประเทศ|อยู่บ้าน',never:'พิมพ์ต่อจาก "ใครเคย" เช่น แอบดูโทรศัพท์คนอื่น',truth:'พิมพ์เรื่องที่ให้ผู้เล่นบอก เช่น เคยหลับในโรงหนัง',quick:'พิมพ์โจทย์ เช่น บอกชื่อสัตว์ 3 ชนิด',mission:'พิมพ์ภารกิจ เช่น เต้นท่าอะไรก็ได้ 10 วินาที','most-likely':'พิมพ์ในรูป ใครมีโอกาส…?'}
 const DESC:Record<string,string>={
+  battle:'ทุกคนวางเรือลับบนกระดาน 5×5 (เรือ 3 ลำ ยาว 3/2/2 ช่อง) แล้วผลัดกันยิง: เลือกคนที่จะยิงก่อน จากนั้นเลือกช่อง ระบบบอกแค่ โดน/พลาด/จม ของนัดล่าสุด ไม่มีกระดานจดช่องที่ยิงไปแล้ว ต้องจำเอง! เรือหมดลำก็ตกรอบ เหลือคนสุดท้ายชนะ (วางเรือ 90 วินาที • ตาละ 25 วินาที)',
   king:'ทุกคนกดจั่วไพ่จากสำรับเดียวกันบนมือถือตัวเอง (เห็นเฉพาะไพ่ตัวเองก่อน) แล้วเปิดพร้อมกัน ใครแต้มสูงสุดได้เป็น 👑 พระราชา ออกคำสั่งให้ใครในวงก็ได้ ให้ทำภารกิจหรือดื่ม (ไม่สบายใจจะเปลี่ยนเป็นดื่มน้ำก็ได้)',
   cards:'สำรับไพ่จริง 52 ใบ ผลัดกันกดเปิดไพ่ทีละใบ แต่ละใบมีกติกาสนุก ๆ ให้ทำทั้งวง ไพ่ที่เปิดแล้วไม่กลับเข้ามาสุ่มอีกจนกว่า Host จะเริ่มสำรับใหม่ (ลงโทษจะดื่มน้ำหรือทำภารกิจเล็ก ๆ ตกลงกันในวง)',
   taboo:'สุ่มคนหนึ่งมาใบ้คำที่เห็นบนจอให้เพื่อนทายภายใน 60 วินาที โดยห้ามพูดคำต้องห้ามที่ขึ้นใต้คำนั้น! เพื่อนช่วยกันทายด้วยปาก ถ้าคนใบ้หลุดพูดคำห้าม เพื่อนกดปุ่ม 🚨 ได้ คะแนน = ทายถูก − โดนบัซเซอร์',
@@ -42,6 +47,71 @@ const DESC:Record<string,string>={
   truth:'สุ่มคนหนึ่งมาเล่าเรื่องของตัวเอง เพื่อนโหวตว่า จริง หรือ มั่ว แล้วคนเล่าเฉลย (20 วินาที)',
   quick:'สุ่มคนหนึ่งมาตอบโจทย์ให้ครบภายใน 5 วินาที เพื่อน ๆ ช่วยกันตัดสินว่าทำทันไหม',
   mission:'ทุกคนเห็นภารกิจพร้อมกัน ทำให้เสร็จก่อนหมดเวลา 30 วินาที ไม่มีการโหวต'}
+const N=5,FLEET=[3,2,2],COLS='ABCDE'
+const cellName=(c:number)=>`${COLS[c%N]}${Math.floor(c/N)+1}`
+function shotText(ls:Shot|null,nameOf:(id?:string|null)=>string){
+  if(!ls||ls.type==='start')return 'เริ่มยิงได้เลย!'
+  if(ls.type==='timeout')return `⏰ ${nameOf(ls.by)} หมดเวลา ข้ามตา`
+  const r=ls.result==='miss'?'💧 พลาด':ls.result==='sunk'?`🔥 จมเรือ (${ls.size} ช่อง)!`:'💥 โดน!'
+  return `${nameOf(ls.by)} ยิง ${nameOf(ls.target)} ช่อง ${cellName(ls.cell??0)} → ${r}${ls.out?` • ${nameOf(ls.target)} ตกรอบ 💀`:''}`
+}
+function Grid({cls,sym,onTap,small}:{cls:(i:number)=>string;sym:(i:number)=>string;onTap?:(i:number)=>void;small?:boolean}){
+  return(<div className={`grid grid-cols-6 gap-1 items-center text-center text-xs text-white/50 mx-auto ${small?'max-w-[12rem]':'max-w-[19rem]'}`}>
+    <span/>{[...COLS].map(l=><span key={l}>{l}</span>)}
+    {Array.from({length:N},(_,r)=><Fragment key={r}><span>{r+1}</span>
+      {Array.from({length:N},(_,c)=>{const i=r*N+c;return <button key={i} type="button" disabled={!onTap} aria-label={`ช่อง ${cellName(i)}`} onClick={()=>onTap?.(i)} className={`aspect-square rounded-lg border ${small?'text-sm':'text-xl'} ${cls(i)}`}>{sym(i)}</button>})}</Fragment>)}</div>)}
+const boardCls=(cells:number[],hit:number[])=>(i:number)=>cells.includes(i)&&hit.includes(i)?'bg-red-500/50 border-red-400':cells.includes(i)?'bg-cyan-500/40 border-cyan-300':'bg-white/5 border-white/10'
+const boardSym=(cells:number[],hit:number[])=>(i:number)=>cells.includes(i)&&hit.includes(i)?'💥':cells.includes(i)?'🚢':''
+function Battle({s,me,ps,bp,ships,hits,call}:{s:S;me?:P;ps:P[];bp:BP[];ships:BShip[];hits:BHit[];call:(fn:string,args:object)=>void}){
+  const [horiz,setHoriz]=useState(true);const [plan,setPlan]=useState<number[][]>([])
+  const [tgt,setTgt]=useState('');const [cell,setCell]=useState<number|null>(null)
+  useEffect(()=>{setTgt('');setCell(null)},[s.ends_at,s.turn_id])
+  const nameOf=(id?:string|null)=>ps.find(p=>p.id===id)?.nickname??'?'
+  const mine=bp.find(b=>b.player_id===me?.id)
+  const myCells=ships.filter(x=>x.player_id===me?.id).flatMap(x=>x.cells)
+  const myHit=hits.filter(h=>h.player_id===me?.id).map(h=>h.cell)
+  const ownBoard=<Grid small cls={boardCls(myCells,myHit)} sym={boardSym(myCells,myHit)}/>
+  if(s.phase==='place'){
+    if(!mine)return <p className="text-center text-white/60">เกมนี้เริ่มไปแล้ว คุณดูอยู่</p>
+    if(myCells.length>0)return(<div className="space-y-3"><p className="text-center text-lg">✓ วางเรือแล้ว<br/><span className="text-white/60 text-sm">รอเพื่อน... ({s.votes_count}/{bp.length})</span></p>{ownBoard}<p className="text-center text-sm text-white/60">กระดานของคุณ — จำตำแหน่งเรือไว้!</p></div>)
+    const size:number|undefined=FLEET[plan.length];const used=plan.flat()
+    const tap=(i:number)=>{
+      if(size===undefined)return
+      const r=Math.floor(i/N),c=i%N
+      if(horiz?c+size>N:r+size>N)return
+      const cells=Array.from({length:size},(_,k)=>horiz?i+k:i+k*N)
+      if(cells.some(x=>used.includes(x)))return
+      setPlan([...plan,cells])}
+    return(<div className="space-y-3">
+      <p className="text-center">{size!==undefined?`วางเรือยาว ${size} ช่อง (${plan.length+1}/${FLEET.length}) — แตะช่องเริ่มต้น`:'วางครบแล้ว กดยืนยันได้เลย'}</p>
+      <Grid cls={i=>used.includes(i)?'bg-cyan-500/40 border-cyan-300':'bg-white/5 border-white/20'} sym={i=>used.includes(i)?'🚢':''} onTap={tap}/>
+      <div className="grid grid-cols-2 gap-2"><button className="btn alt" onClick={()=>setHoriz(v=>!v)}>{horiz?'↔️ แนวนอน':'↕️ แนวตั้ง'}</button><button className="btn alt" disabled={plan.length===0} onClick={()=>setPlan(plan.slice(0,-1))}>↩️ ลบลำล่าสุด</button></div>
+      <button className="btn" disabled={plan.length!==FLEET.length} onClick={()=>call('place_ships',{p_session:s.id,p_ships:plan})}>✅ ยืนยันการวางเรือ</button>
+      <button className="btn alt" onClick={()=>call('place_ships',{p_session:s.id})}>🎲 สุ่มวางให้</button></div>)
+  }
+  const turn=s.turn_id
+  const myTurn=!!me&&turn===me.id&&!!mine?.alive
+  const others=bp.filter(b=>b.alive&&b.player_id!==me?.id)
+  return(<div className="space-y-3">
+    <p className="card text-center text-sm" aria-live="polite">{shotText(s.last_shot,nameOf)}</p>
+    <p className="text-center text-xs text-white/40">แสดงเฉพาะการยิงล่าสุด — ใครยิงช่องไหนไปแล้วต้องจำเอง!</p>
+    <ul className="flex flex-wrap gap-2 justify-center">{bp.map(b=><li key={b.player_id} className={`px-3 py-1 rounded-full text-sm border ${turn===b.player_id?'border-pink-400 bg-pink-500/20':'border-white/20'} ${b.alive?'':'opacity-40 line-through'}`}>{nameOf(b.player_id)}{!b.alive&&' 💀'}{turn===b.player_id&&' 🎯'}</li>)}</ul>
+    {myTurn?<div className="space-y-2">
+      <h3 className="text-center font-bold">ตาของคุณ! 1) เลือกคนที่จะยิง</h3>
+      <ul className="grid grid-cols-2 gap-2">{others.map(b=><li key={b.player_id}><button aria-pressed={tgt===b.player_id} className={`card w-full py-3 ${tgt===b.player_id?'border-pink-400 shadow-[0_0_16px_#ec489966]':''}`} onClick={()=>{setTgt(b.player_id);setCell(null)}}>{nameOf(b.player_id)}</button></li>)}</ul>
+      {tgt&&<><h3 className="text-center font-bold">2) เลือกช่องที่จะยิงใส่ {nameOf(tgt)}</h3>
+        <Grid cls={i=>cell===i?'bg-pink-500/40 border-pink-400':'bg-white/5 border-white/20'} sym={i=>cell===i?'🎯':''} onTap={setCell}/>
+        <button className="btn" disabled={cell===null} onClick={()=>{if(cell!==null)call('battle_fire',{p_session:s.id,p_target:tgt,p_cell:cell})}}>🔥 ยิง{cell!==null?` ช่อง ${cellName(cell)}`:''}</button></>}</div>
+      :<p className="text-center text-lg">{mine&&!mine.alive?'💀 คุณตกรอบแล้ว ดูเพื่อนเล่นต่อ':`⏳ รอ ${nameOf(turn)} ยิง...`}</p>}
+    {mine&&<div><p className="text-center text-sm text-white/60 mb-1">กระดานของคุณ (💥 = เรือโดนยิง)</p>{ownBoard}</div>}</div>)}
+function BattleOver({s,ps,bp,ships,hits}:{s:S;ps:P[];bp:BP[];ships:BShip[];hits:BHit[]}){
+  const nameOf=(id?:string|null)=>ps.find(p=>p.id===id)?.nickname??'?'
+  const win=s.subject_id
+  return(<div className="space-y-3"><div className="text-center text-6xl">🏆</div>
+    <h2 className="text-center text-2xl font-bold">{win?`${nameOf(win)} ชนะ! เรือรอดลำสุดท้าย`:'เกมจบ'}</h2>
+    <p className="card text-center text-sm">{shotText(s.last_shot,nameOf)}</p>
+    <div className="grid grid-cols-2 gap-3">{bp.map(b=>{const cs=ships.filter(x=>x.player_id===b.player_id).flatMap(x=>x.cells);const hs=hits.filter(h=>h.player_id===b.player_id).map(h=>h.cell)
+      return <div key={b.player_id} className="space-y-1"><p className="text-center text-sm font-bold">{nameOf(b.player_id)}{b.player_id===win&&' 👑'}</p><Grid small cls={boardCls(cs,hs)} sym={boardSym(cs,hs)}/></div>})}</div></div>)}
 function Bar({label,n,total,note}:{label:string;n:number;total:number;note?:string}){return(
   <div><div className="flex justify-between"><span>{label}</span><b>{n}</b></div>
   <div className="h-3 rounded bg-white/10"><div className="h-3 rounded bg-gradient-to-r from-purple-500 to-pink-500 transition-all" style={{width:`${total?n/total*100:0}%`}}/></div>
@@ -51,7 +121,7 @@ export default function Room(){
   const [uid,setUid]=useState('');const [room,setRoom]=useState<R|null>(null);const [ps,setPs]=useState<P[]>([])
   const [s,setS]=useState<S|null>(null);const [vs,setVs]=useState<V[]>([]);const [sec,setSec]=useState<Sec[]>([]);const [ans,setAns]=useState<number|null>(null)
   const [now,setNow]=useState(Date.now());const [qr,setQr]=useState(false);const [off,setOff]=useState(false);const [err,setErr]=useState('')
-  const [game,setGame]=useState('king');const [skew,setSkew]=useState(0);const [cards,setCards]=useState<Card[]>([]);const [deck,setDeck]=useState<Deck[]>([]);const [peek,setPeek]=useState(false);const [cmd,setCmd]=useState('');const [tgt,setTgt]=useState('ALL')
+  const [game,setGame]=useState('battle');const [skew,setSkew]=useState(0);const [cards,setCards]=useState<Card[]>([]);const [deck,setDeck]=useState<Deck[]>([]);const [peek,setPeek]=useState(false);const [cmd,setCmd]=useState('');const [tgt,setTgt]=useState('ALL');const [bp,setBp]=useState<BP[]>([]);const [bShips,setBShips]=useState<BShip[]>([]);const [bHits,setBHits]=useState<BHit[]>([])
   const load=useCallback(async()=>{
     const id=await ensureAuth();setUid(id)
     const {data:r}=await supabase.from('rooms').select('id,status,host_id').eq('code',code).maybeSingle()
@@ -66,7 +136,14 @@ export default function Room(){
       if(g.data.game_type==='quiz'){const a=await supabase.from('game_answers').select('correct').eq('session_id',g.data.id).maybeSingle();setAns(a.data?a.data.correct:null)}else setAns(null)
     if(g.data.game_type==='taboo'){const c=await supabase.from('taboo_cards').select('idx,target,forbidden,result').eq('session_id',g.data.id).order('idx');setCards(c.data||[])}else setCards([])
       if(g.data.game_type==='cards'){const d=await supabase.from('card_deck').select('pos,face,suit,drawn_by').eq('session_id',g.data.id).not('drawn_at','is',null).order('pos');setDeck(d.data||[])}else if(g.data.game_type==='king'){const d=await supabase.from('king_deck').select('pos,face,suit,drawn_by').eq('session_id',g.data.id).not('drawn_by','is',null);setDeck(d.data||[])}else setDeck([])
-    }else{setVs([]);setSec([]);setAns(null);setCards([]);setDeck([])}
+    
+      if(g.data.game_type==='battle'){
+        const [a,b,c]=await Promise.all([supabase.from('battle_players').select('player_id,seq,alive').eq('session_id',g.data.id).order('seq'),
+          supabase.from('battle_ships').select('player_id,ship_idx,cells').eq('session_id',g.data.id),
+          supabase.from('battle_hits').select('player_id,cell').eq('session_id',g.data.id)])
+        setBp(a.data||[]);setBShips(b.data||[]);setBHits(c.data||[])
+      }else{setBp([]);setBShips([]);setBHits([])}
+    }else{setVs([]);setSec([]);setAns(null);setCards([]);setDeck([]);setBp([]);setBShips([]);setBHits([])}
   },[code,router])
   useEffect(()=>{load()
     const t0=Date.now()
@@ -80,7 +157,7 @@ export default function Room(){
   const gt=s?.game_type
   const left=s?Math.max(0,Math.ceil((new Date(s.ends_at).getTime()-(now+skew))/1000)):0
   const myVote=vs.find(v=>v.voter_id===me?.id)
-  useEffect(()=>{if(s?.status==='voting'&&!['roulette','king'].includes(s.game_type)&&(left===0
+  useEffect(()=>{if(s?.status==='voting'&&!['roulette','king','battle'].includes(s.game_type)&&(left===0
     ||(['most-likely','never','either','odd','sync','quiz'].includes(s.game_type)&&ps.length>1&&s.votes_count>=ps.length)
     ||(s.game_type==='truth'&&ps.length>1&&s.votes_count>=ps.length-1)))
     supabase.rpc('finish_round',{p_session:s.id}).then(load)},[left,ps.length,s,load])
@@ -96,8 +173,12 @@ export default function Room(){
     const id=s.id;const run=()=>supabase.rpc('finish_king',{p_session:id}).then(r=>{if(!r.error)load()});run()
     const t=setInterval(run,1500)
     return()=>clearInterval(t)},[gt,s,left,ps.length,load])
+  useEffect(()=>{if(gt!=='battle'||!s||s.status!=='voting'||left>0)return
+    const id=s.id;const run=()=>supabase.rpc('battle_tick',{p_session:id}).then(r=>{if(r.data)load()});run()
+    const t=setInterval(run,1500)
+    return()=>clearInterval(t)},[gt,s,left,load])
   async function call(fn:string,args:object){const {error}=await supabase.rpc(fn,args);setErr(error?error.message:'');load()}
-  const go=(g:string)=>g==='king'?call('start_king',{p_code:code}):g==='cards'?call('start_cards',{p_code:code}):g==='taboo'?call('start_taboo',{p_code:code}):g==='roulette'?call('start_roulette',{p_code:code}):g.startsWith('quiz')?call('start_quiz',{p_code:code,p_lang:g.includes('-')?g.split('-')[1]:null}):call('start_game',{p_code:code,p_game:g})
+  const go=(g:string)=>g==='battle'?call('start_battle',{p_code:code}):g==='king'?call('start_king',{p_code:code}):g==='cards'?call('start_cards',{p_code:code}):g==='taboo'?call('start_taboo',{p_code:code}):g==='roulette'?call('start_roulette',{p_code:code}):g.startsWith('quiz')?call('start_quiz',{p_code:code,p_lang:g.includes('-')?g.split('-')[1]:null}):call('start_game',{p_code:code,p_game:g})
   if(!room)return <main className="p-10 text-center text-xl">กำลังโหลด…</main>
   if(room.status==='closed')return <main className="p-10 text-center space-y-4"><div className="text-6xl">⌛</div><p>ห้องนี้ปิดแล้ว</p><a className="btn" href="/">กลับหน้าแรก</a></main>
   const link=typeof window!=='undefined'?`${location.origin}/join?room=${code}`:''
@@ -110,11 +191,11 @@ export default function Room(){
   const myWord=sec.find(k=>k.player_id===me?.id)?.word
   const oddK=sec.find(k=>k.is_odd);const oddP=ps.find(p=>p.id===oddK?.player_id)
   const majWord=sec.find(k=>!k.is_odd)?.word
-  const title=!s?'':gt==='king'?'👑 พระราชา':gt==='cards'?'🃏 ไพ่ปาร์ตี้':gt==='taboo'?`🙊 ${nm} กำลังใบ้!`:gt==='roulette'?`🎰 คนสุดท้ายต้อง: ${s.question_text}`:gt==='truth'?`${nm} บอกว่า “${s.question_text}” จริงหรือมั่ว?`
+  const title=!s?'':gt==='battle'?'🚢 เรือรบ':gt==='king'?'👑 พระราชา':gt==='cards'?'🃏 ไพ่ปาร์ตี้':gt==='taboo'?`🙊 ${nm} กำลังใบ้!`:gt==='roulette'?`🎰 คนสุดท้ายต้อง: ${s.question_text}`:gt==='truth'?`${nm} บอกว่า “${s.question_text}” จริงหรือมั่ว?`
     :gt==='quick'?`${nm} ต้อง${s.question_text} ใน 5 วิ!`:gt==='mission'?s.question_text
     :gt==='never'?`ใครเคย ${s.question_text}?`:gt==='either'?'เลือกข้าง!':(gt==='sync'||gt==='quiz')?oa:gt==='odd'?`หมวด: ${s.question_text}`:`“${s.question_text}”`
   const gname=GAMES.find(g=>g[0]===game)?.[2]
-  const noCustom=game==='odd'||game==='taboo'||game==='cards'||game==='king'||game==='roulette'||game.startsWith('quiz')
+  const noCustom=game==='odd'||game==='taboo'||game==='cards'||game==='king'||game==='battle'||game==='roulette'||game.startsWith('quiz')
   const pick=(c:string)=>call('cast_choice',{p_session:s?.id,p_choice:c})
   const nextGame=gt==='quiz'?(game.startsWith('quiz')?game:'quiz'):(gt??'')
   const remain=52-deck.length;const last=deck[deck.length-1];const turnP=ps[deck.length%Math.max(ps.length,1)]
@@ -162,7 +243,8 @@ export default function Room(){
       {s.status==='voting'?<>
         {gt!=='cards'&&<div className={`mx-auto w-20 h-20 rounded-full grid place-items-center text-3xl font-bold border-4 ${left<=5?'border-red-500 animate-pulse':'border-pink-500'}`} aria-live="polite">{left}</div>}
         {gt==='odd'&&<div className="card text-center"><div className="text-sm text-white/60">คำลับของคุณ (อย่าให้ใครเห็น!)</div><div className="text-4xl font-extrabold my-2">{myWord??'…'}</div><p className="text-sm text-white/60">ผลัดกันอธิบายคำนี้แบบไม่บอกตรง ๆ แล้วโหวตคนที่น่าสงสัยที่สุด</p></div>}
-        {gt==='king'?<div className="space-y-3">
+        {gt==='battle'?<Battle key={s.id} s={s} me={me} ps={ps} bp={bp} ships={bShips} hits={bHits} call={call}/>
+        :gt==='king'?<div className="space-y-3">
           <p className="text-center text-lg">👑 ใครไพ่แต้มสูงสุดได้เป็นพระราชา!</p>
           {myCard?<button className="card w-full text-center py-6" aria-pressed={peek} onClick={()=>setPeek(v=>!v)}>{peek?<span className={`text-7xl font-extrabold ${redS(myCard.suit)?'text-red-400':'text-white'}`}>{myCard.face}{myCard.suit}</span>:<span className="text-6xl">🂠<br/><span className="text-sm text-white/60">แตะเพื่อดูไพ่ของคุณ (ปิดบังจากเพื่อนข้าง ๆ)</span></span>}</button>
           :<button className="btn text-xl py-6" onClick={()=>call('draw_king',{p_session:s.id})}>🃏 จั่วไพ่</button>}
@@ -202,6 +284,7 @@ export default function Room(){
               <input className="inp" maxLength={200} aria-label="คำสั่ง" placeholder="เช่น ร้องเพลงท่อนฮุก หรือ ดื่ม 1 จิบ" value={cmd} onChange={e=>setCmd(e.target.value)}/>
               <button className="btn" disabled={!cmd.trim()} onClick={()=>{call('king_command',{p_session:s.id,p_target:tgt==='ALL'?null:tgt,p_text:cmd});setCmd('')}}>👑 ประกาศบัญชา</button></div>
             :<p className="text-center text-white/60">รอ {kingP.nickname} ออกคำสั่ง...</p>)}</>}
+        {gt==='battle'&&<BattleOver s={s} ps={ps} bp={bp} ships={bShips} hits={bHits}/>}
         {gt==='taboo'&&<>
           <div className="text-center text-5xl">🙊</div>
           <h2 className="text-center text-2xl font-bold">{nm} ใบ้ได้ {s.ok_count-s.buzz_count} คะแนน</h2>
