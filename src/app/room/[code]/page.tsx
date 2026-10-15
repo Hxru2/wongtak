@@ -115,7 +115,7 @@ function BattleOver({s,ps,bp,ships,hits}:{s:S;ps:P[];bp:BP[];ships:BShip[];hits:
     <div className="grid grid-cols-2 gap-3">{bp.map(b=>{const cs=ships.filter(x=>x.player_id===b.player_id).flatMap(x=>x.cells);const hs=hits.filter(h=>h.player_id===b.player_id).map(h=>h.cell)
       return <div key={b.player_id} className="space-y-1"><p className="text-center text-sm font-bold">{nameOf(b.player_id)}{b.player_id===win&&' 👑'}</p><Grid small cls={boardCls(cs,hs)} sym={boardSym(cs,hs)}/></div>})}</div></div>)}
 const MAX_REROLL=3
-function MissionPanel({code,me,host,ps,ms,startOpen,call}:{code:string;me:P;host:boolean;ps:P[];ms:Mission[];startOpen:boolean;call:(fn:string,args:object)=>void}){
+function MissionPanel({code,me,host,ps,ms,startOpen,compact,call}:{code:string;me:P;host:boolean;ps:P[];ms:Mission[];startOpen:boolean;compact:boolean;call:(fn:string,args:object)=>void}){
   const [open,setOpen]=useState(startOpen);const [peek,setPeek]=useState(false);const [flash,setFlash]=useState('')
   const prev=useRef<number|null>(null)
   const nameOf=(id:string)=>ps.find(p=>p.id===id)?.nickname??'?'
@@ -136,6 +136,10 @@ function MissionPanel({code,me,host,ps,ms,startOpen,call}:{code:string;me:P;host
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[done.length])
   useEffect(()=>{setPeek(false)},[mine?.id])
+  useEffect(()=>{if(compact)setOpen(false)},[compact])
+  if(compact&&!open)return(<div className="flex flex-col items-end gap-1">
+    {flash&&<p role="status" className="text-xs text-pink-300 text-right">{flash}</p>}
+    <button type="button" className="text-xs px-3 py-1 rounded-full bg-white/10 border border-white/20" aria-label="เปิดภารกิจลับ" onClick={()=>setOpen(true)}>🕵️{mine?' ●':''}</button></div>)
   return(<section className="card space-y-2" aria-label="ภารกิจลับ">
     {flash&&<p role="status" className="text-sm text-center text-pink-300">{flash}</p>}
     <button type="button" className="w-full flex items-center justify-between gap-2 text-left" aria-expanded={open} onClick={()=>setOpen(v=>!v)}>
@@ -275,12 +279,13 @@ export default function Room(){
   const playerGrid=<ul className="grid grid-cols-2 gap-3">{ps.filter(p=>p.id!==me?.id).map((p,i)=><li key={p.id}>
     <button className="card w-full py-6 hover:border-pink-400" onClick={()=>call('cast_vote',{p_session:s?.id,p_target:p.id})}>
     <span className={`block mx-auto w-12 h-12 rounded-full leading-[3rem] font-bold ${COL[i%COL.length]}`}>{p.nickname[0]}</span>{p.nickname}</button></li>)}</ul>
+  const inRound=room.status==='playing'&&s?.status==='voting'
   return(<main className="max-w-md mx-auto p-4 space-y-4">
     {off&&<div role="status" className="card text-center">📡 การเชื่อมต่อขาดหาย กำลังเชื่อมต่อใหม่...</div>}
     {err&&<p role="alert" className="text-pink-400 text-center">{({NO_QUESTIONS:'ยังไม่มีคำถามในชุดนี้',NO_REROLLS_LEFT:'ใช้สิทธิ์เปลี่ยนภารกิจครบแล้ว',ALREADY_ACTIVE:'คุณมีภารกิจอยู่แล้ว',NO_MISSIONS:'ยังไม่มีภารกิจในคลัง'} as Record<string,string>)[err]??err}</p>}
-    <header className="text-center"><div className="text-sm text-white/60">🍻 วงแตก • ROOM</div>
-      <div className="text-4xl font-mono font-extrabold tracking-[.3em]">{code}</div></header>
-    {me&&<MissionPanel code={code} me={me} host={host} ps={ps} ms={ms} startOpen={room.status==='waiting'} call={call}/>}
+    {!inRound&&<header className="text-center"><div className="text-sm text-white/60">🍻 วงแตก • ROOM</div>
+      <div className="text-4xl font-mono font-extrabold tracking-[.3em]">{code}</div></header>}
+    {me&&<MissionPanel code={code} me={me} host={host} ps={ps} ms={ms} startOpen={room.status==='waiting'} compact={inRound} call={call}/>}
     {room.status==='waiting'&&<>
       <div className="flex gap-2"><button className="btn alt" onClick={()=>navigator.clipboard.writeText(link)}>📋 คัดลอกลิงก์</button><button className="btn alt" onClick={()=>setQr(true)}>📱 QR</button></div>
       <section className="card"><h2 className="mb-3 font-bold">ผู้เล่น {ps.length} คน</h2>
@@ -297,7 +302,7 @@ export default function Room(){
         <button className="btn alt" onClick={()=>confirm('ปิดห้อง?')&&call('close_room',{p_code:code})}>ปิดห้อง</button></div>
         :<p className="text-center text-white/60">รอ Host เลือกเกม...</p>}</>}
     {room.status==='playing'&&s&&<>
-      <p className="text-center text-white/60">รอบที่ {s.round}</p>
+      {!inRound&&<p className="text-center text-white/60">รอบที่ {s.round}</p>}
       <h1 className="text-2xl font-bold text-center">{s.status==='voting'&&gt==='either'?'เลือกข้าง!':title}</h1>
       {s.status==='voting'?<>
         {gt!=='cards'&&<div className={`mx-auto w-20 h-20 rounded-full grid place-items-center text-3xl font-bold border-4 ${left<=5?'border-red-500 animate-pulse':'border-pink-500'}`} aria-live="polite">{left}</div>}
