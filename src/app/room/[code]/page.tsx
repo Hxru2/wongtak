@@ -4,7 +4,7 @@ import {useParams,useRouter} from 'next/navigation'
 import {QRCodeSVG} from 'qrcode.react'
 import {supabase,ensureAuth} from '@/lib/supabase'
 type P={id:string;user_id:string;nickname:string;is_host:boolean;is_connected:boolean}
-type S={id:string;question_text:string;round:number;status:string;ends_at:string;game_type:string;subject_id:string|null;ended_at:string|null;ok_count:number;buzz_count:number;votes_count:number;phase:string|null;turn_id:string|null;last_shot:Shot|null;outcome?:string|null}
+type S={id:string;question_text:string;round:number;status:string;ends_at:string;game_type:string;subject_id:string|null;ended_at:string|null;ok_count:number;buzz_count:number;votes_count:number;phase:string|null;turn_id:string|null;last_shot:Shot|null;outcome?:string|null;shots_left?:number|null;shot_targets?:string[]|null}
 type Deck={pos:number;face:string;suit:string;drawn_by:string|null}
 type Shot={type:string;by?:string;target?:string;cell?:number;result?:string;size?:number;out?:boolean;n:number}
 type Mission={id:string;player_id:string;mission_text:string;status:string;completed_at:string|null}
@@ -34,7 +34,7 @@ const CARD_RULES:Record<string,[string,string]>={
 const HINT:Record<string,string>={either:'พิมพ์สองตัวเลือก คั่นด้วย | เช่น กินเผ็ด|กินหวาน',sync:'พิมพ์คำถามตามด้วย 4 ตัวเลือก คั่นด้วย | เช่น ไปเที่ยวไหน|ทะเล|ภูเขา|ต่างประเทศ|อยู่บ้าน',never:'พิมพ์ต่อจาก "ใครเคย" เช่น แอบดูโทรศัพท์คนอื่น',truth:'พิมพ์เรื่องที่ให้ผู้เล่นบอก เช่น เคยหลับในโรงหนัง',quick:'พิมพ์โจทย์ เช่น บอกชื่อสัตว์ 3 ชนิด',mission:'พิมพ์ภารกิจ เช่น เต้นท่าอะไรก็ได้ 10 วินาที','most-likely':'พิมพ์ในรูป ใครมีโอกาส…?'}
 const DESC:Record<string,string>={
   insider:'สุ่ม 1 คนเป็น “ผู้ตอบ” และอีก 1 คนเป็น 😈 Insider ทั้งคู่เห็นคำลับ คนที่เหลือต้องทายคำโดยถามผู้ตอบได้แค่ ใช่/ไม่ใช่ ภายใน 4 นาที Insider ต้องแอบชี้นำให้ทายถูกโดยไม่ให้ใครจับได้ พอทายถูกแล้วทุกคนโหวตหา Insider (60 วินาที) ถ้าโหวตถูกฝ่ายผู้ทายชนะ ถ้าพลาดหรือเสมอ Insider ชนะ ทายไม่ทันทุกคนแพ้ (ต้อง 4 คนขึ้นไป • ผู้ตอบสลับคนอัตโนมัติ)',
-  battle:'ทุกคนวางเรือลับบนกระดาน 5×5 (เรือ 3 ลำ ยาว 3/2/2 ช่อง) แล้วผลัดกันยิง: เลือกคนที่จะยิงก่อน จากนั้นเลือกช่อง ระบบบอกแค่ โดน/พลาด/จม ของนัดล่าสุด ไม่มีกระดานจดช่องที่ยิงไปแล้ว ต้องจำเอง! เรือหมดลำก็ตกรอบ เหลือคนสุดท้ายชนะ (วางเรือ 90 วินาที • ตาละ 25 วินาที)',
+  battle:'ทุกคนวางเรือลับบนกระดาน 5×5 (เรือ 3 ลำ ยาว 3/2/2 ช่อง) แล้วผลัดกันยิง: เลือกคนที่จะยิงก่อน จากนั้นเลือกช่อง ระบบบอกแค่ โดน/พลาด/จม ของนัดล่าสุด ไม่มีกระดานจดช่องที่ยิงไปแล้ว ต้องจำเอง! เรือหมดลำก็ตกรอบ เหลือคนสุดท้ายชนะ กระสุนจำกัด: 1 ตายิงได้ “จำนวนเป้าหมาย − 1” นัด (ขั้นต่ำ 1) และยิงได้คนละ 1 นัดต่อตา เช่น 4 คน ยิงได้ 2 นัด จะมี 1 คนที่ไม่โดนยิง ยิ่งคนตกรอบกระสุนยิ่งน้อยลง หมดเวลา = ระบบสุ่มยิงกระสุนที่เหลือให้ (วางเรือ 90 วินาที • ตาละ 25 วินาที + 10 วินาทีต่อกระสุนที่เพิ่ม)',
   king:'ทุกคนกดจั่วไพ่จากสำรับเดียวกันบนมือถือตัวเอง (เห็นเฉพาะไพ่ตัวเองก่อน) แล้วเปิดพร้อมกัน ใครแต้มสูงสุดได้เป็น 👑 พระราชา ออกคำสั่งให้ใครในวงก็ได้ ให้ทำภารกิจหรือดื่ม (ไม่สบายใจจะเปลี่ยนเป็นดื่มน้ำก็ได้)',
   cards:'สำรับไพ่จริง 52 ใบ ผลัดกันกดเปิดไพ่ทีละใบ แต่ละใบมีกติกาสนุก ๆ ให้ทำทั้งวง ไพ่ที่เปิดแล้วไม่กลับเข้ามาสุ่มอีกจนกว่า Host จะเริ่มสำรับใหม่ (ลงโทษจะดื่มน้ำหรือทำภารกิจเล็ก ๆ ตกลงกันในวง)',
   taboo:'สุ่มคนหนึ่งมาใบ้คำที่เห็นบนจอให้เพื่อนทายภายใน 60 วินาที โดยห้ามพูดคำต้องห้ามที่ขึ้นใต้คำนั้น! เพื่อนช่วยกันทายด้วยปาก ถ้าคนใบ้หลุดพูดคำห้าม เพื่อนกดปุ่ม 🚨 ได้ คะแนน = ทายถูก − โดนบัซเซอร์',
@@ -55,7 +55,7 @@ function shotText(ls:Shot|null,nameOf:(id?:string|null)=>string){
   if(!ls||ls.type==='start')return 'เริ่มยิงได้เลย!'
   if(ls.type==='timeout')return `⏰ ${nameOf(ls.by)} หมดเวลา ข้ามตา`
   const r=ls.result==='miss'?'💧 พลาด':ls.result==='sunk'?`🔥 จมเรือ (${ls.size} ช่อง)!`:'💥 โดน!'
-  return `${nameOf(ls.by)} ยิง ${nameOf(ls.target)} ช่อง ${cellName(ls.cell??0)} → ${r}${ls.out?` • ${nameOf(ls.target)} ตกรอบ 💀`:''}`
+  return `${(ls as Shot&{auto?:boolean}).auto?'⏰ หมดเวลา สุ่มยิงให้: ':''}${nameOf(ls.by)} ยิง ${nameOf(ls.target)} ช่อง ${cellName(ls.cell??0)} → ${r}${ls.out?` • ${nameOf(ls.target)} ตกรอบ 💀`:''}`
 }
 function Grid({cls,sym,onTap,small}:{cls:(i:number)=>string;sym:(i:number)=>string;onTap?:(i:number)=>void;small?:boolean}){
   return(<div className={`grid grid-cols-6 gap-1 items-center text-center text-xs text-white/50 mx-auto ${small?'max-w-[12rem]':'max-w-[19rem]'}`}>
@@ -67,7 +67,7 @@ const boardSym=(cells:number[],hit:number[])=>(i:number)=>cells.includes(i)&&hit
 function Battle({s,me,ps,bp,ships,hits,call}:{s:S;me?:P;ps:P[];bp:BP[];ships:BShip[];hits:BHit[];call:(fn:string,args:object)=>void}){
   const [horiz,setHoriz]=useState(true);const [plan,setPlan]=useState<number[][]>([])
   const [tgt,setTgt]=useState('');const [cell,setCell]=useState<number|null>(null)
-  useEffect(()=>{setTgt('');setCell(null)},[s.ends_at,s.turn_id])
+  useEffect(()=>{setTgt('');setCell(null)},[s.ends_at,s.turn_id,s.last_shot?.n])
   const nameOf=(id?:string|null)=>ps.find(p=>p.id===id)?.nickname??'?'
   const mine=bp.find(b=>b.player_id===me?.id)
   const myCells=ships.filter(x=>x.player_id===me?.id).flatMap(x=>x.cells)
@@ -94,17 +94,19 @@ function Battle({s,me,ps,bp,ships,hits,call}:{s:S;me?:P;ps:P[];bp:BP[];ships:BSh
   const turn=s.turn_id
   const myTurn=!!me&&turn===me.id&&!!mine?.alive
   const others=bp.filter(b=>b.alive&&b.player_id!==me?.id)
+  const doneT=s.shot_targets??[];const ammo=s.shots_left??1
   return(<div className="space-y-3">
     <p className="card text-center text-sm" aria-live="polite">{shotText(s.last_shot,nameOf)}</p>
     <p className="text-center text-xs text-white/40">แสดงเฉพาะการยิงล่าสุด — ใครยิงช่องไหนไปแล้วต้องจำเอง!</p>
     <ul className="flex flex-wrap gap-2 justify-center">{bp.map(b=><li key={b.player_id} className={`px-3 py-1 rounded-full text-sm border ${turn===b.player_id?'border-pink-400 bg-pink-500/20':'border-white/20'} ${b.alive?'':'opacity-40 line-through'}`}>{nameOf(b.player_id)}{!b.alive&&' 💀'}{turn===b.player_id&&' 🎯'}</li>)}</ul>
     {myTurn?<div className="space-y-2">
       <h3 className="text-center font-bold">ตาของคุณ! 1) เลือกคนที่จะยิง</h3>
-      <ul className="grid grid-cols-2 gap-2">{others.map(b=><li key={b.player_id}><button aria-pressed={tgt===b.player_id} className={`card w-full py-3 ${tgt===b.player_id?'border-pink-400 shadow-[0_0_16px_#ec489966]':''}`} onClick={()=>{setTgt(b.player_id);setCell(null)}}>{nameOf(b.player_id)}</button></li>)}</ul>
+      <p className="text-center text-sm text-pink-300">🔫 กระสุนเหลือ {ammo} นัด • ยิงได้คนละ 1 นัดเท่านั้น</p>
+      <ul className="grid grid-cols-2 gap-2">{others.map(b=><li key={b.player_id}><button aria-pressed={tgt===b.player_id} disabled={doneT.includes(b.player_id)} className={`card w-full py-3 ${tgt===b.player_id?'border-pink-400 shadow-[0_0_16px_#ec489966]':''} ${doneT.includes(b.player_id)?'opacity-40':''}`} onClick={()=>{setTgt(b.player_id);setCell(null)}}>{nameOf(b.player_id)}{doneT.includes(b.player_id)&&' ✓ ยิงแล้ว'}</button></li>)}</ul>
       {tgt&&<><h3 className="text-center font-bold">2) เลือกช่องที่จะยิงใส่ {nameOf(tgt)}</h3>
         <Grid cls={i=>cell===i?'bg-pink-500/40 border-pink-400':'bg-white/5 border-white/20'} sym={i=>cell===i?'🎯':''} onTap={setCell}/>
         <button className="btn" disabled={cell===null} onClick={()=>{if(cell!==null)call('battle_fire',{p_session:s.id,p_target:tgt,p_cell:cell})}}>🔥 ยิง{cell!==null?` ช่อง ${cellName(cell)}`:''}</button></>}</div>
-      :<p className="text-center text-lg">{mine&&!mine.alive?'💀 คุณตกรอบแล้ว ดูเพื่อนเล่นต่อ':`⏳ รอ ${nameOf(turn)} ยิง...`}</p>}
+      :<p className="text-center text-lg">{mine&&!mine.alive?'💀 คุณตกรอบแล้ว ดูเพื่อนเล่นต่อ':`⏳ รอ ${nameOf(turn)} ยิง... (กระสุน ${ammo} นัด)`}</p>}
     {mine&&<div><p className="text-center text-sm text-white/60 mb-1">กระดานของคุณ (💥 = เรือโดนยิง)</p>{ownBoard}</div>}</div>)}
 function BattleOver({s,ps,bp,ships,hits}:{s:S;ps:P[];bp:BP[];ships:BShip[];hits:BHit[]}){
   const nameOf=(id?:string|null)=>ps.find(p=>p.id===id)?.nickname??'?'
