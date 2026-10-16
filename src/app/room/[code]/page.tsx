@@ -11,12 +11,13 @@ type Mission={id:string;player_id:string;mission_text:string;status:string;compl
 type BP={player_id:string;seq:number;alive:boolean}
 type BShip={player_id:string;ship_idx:number;cells:number[]}
 type BHit={player_id:string;cell:number}
+type Slip={session_id:string;target_id:string;reporter_id:string}
 type Card={idx:number;target:string;forbidden:string[];result:string|null}
 type V={voter_id:string;target_player_id:string|null;choice:string|null}
 type R={id:string;status:string;host_id:string}
 type Sec={player_id:string;word:string;is_odd:boolean}
 const COL=['bg-purple-500','bg-pink-500','bg-orange-500','bg-cyan-500','bg-emerald-500','bg-yellow-500']
-const GAMES=[['insider','🎭','Insider'],['battle','🚢','เรือรบ'],['king','👑','พระราชา'],['cards','🃏','ไพ่ปาร์ตี้ 52 ใบ'],['taboo','🙊','ใบ้คำห้ามพูด'],['roulette','🎰','รูเล็ตต์ลงโทษ'],['quiz-th','🧩','Quiz (ไทย)'],['quiz-en','🌍','Quiz (English)'],['odd','🕵️','ตัวปลอม'],['sync','🧠','คิดตรงกัน'],['most-likely','😂','ใครมีโอกาสมากที่สุด'],['never','🙋','ใครเคย…'],['either','⚖️','เลือกข้าง'],['truth','🤥','จริงหรือมั่ว'],['quick','⏱️','5 วิ ตอบให้ทัน'],['mission','🎡','สุ่มภารกิจ']]
+const GAMES=[['dice','🎲','ทอยเต๋าลุ้นผล'],['color','🎨','สีต้องห้าม'],['insider','🎭','Insider'],['battle','🚢','เรือรบ'],['king','👑','พระราชา'],['cards','🃏','ไพ่ปาร์ตี้ 52 ใบ'],['taboo','🙊','ใบ้คำห้ามพูด'],['roulette','🎰','รูเล็ตต์ลงโทษ'],['quiz-th','🧩','Quiz (ไทย)'],['quiz-en','🌍','Quiz (English)'],['odd','🕵️','ตัวปลอม'],['sync','🧠','คิดตรงกัน'],['most-likely','😂','ใครมีโอกาสมากที่สุด'],['never','🙋','ใครเคย…'],['either','⚖️','เลือกข้าง'],['truth','🤥','จริงหรือมั่ว'],['quick','⏱️','5 วิ ตอบให้ทัน'],['mission','🎡','สุ่มภารกิจ']]
 const CARD_RULES:Record<string,[string,string]>={
   A:['A • ทุกคนชูมือ','ทุกคนชูมือขึ้นพร้อมกัน คนที่ชูช้าที่สุดโดนลงโทษ'],
   '2':['2 • ชี้เลย','คนเปิดไพ่เลือกชี้เพื่อน 1 คนให้โดนลงโทษ'],
@@ -33,6 +34,8 @@ const CARD_RULES:Record<string,[string,string]>={
   K:['K • ราชาสั่งการ','คนเปิดไพ่สั่งภารกิจสั้น ๆ ให้เพื่อน 1 คนทำ']}
 const HINT:Record<string,string>={either:'พิมพ์สองตัวเลือก คั่นด้วย | เช่น กินเผ็ด|กินหวาน',sync:'พิมพ์คำถามตามด้วย 4 ตัวเลือก คั่นด้วย | เช่น ไปเที่ยวไหน|ทะเล|ภูเขา|ต่างประเทศ|อยู่บ้าน',never:'พิมพ์ต่อจาก "ใครเคย" เช่น แอบดูโทรศัพท์คนอื่น',truth:'พิมพ์เรื่องที่ให้ผู้เล่นบอก เช่น เคยหลับในโรงหนัง',quick:'พิมพ์โจทย์ เช่น บอกชื่อสัตว์ 3 ชนิด',mission:'พิมพ์ภารกิจ เช่น เต้นท่าอะไรก็ได้ 10 วินาที','most-likely':'พิมพ์ในรูป ใครมีโอกาส…?'}
 const DESC:Record<string,string>={
+  dice:'ผลัดกันกดทอยเต๋า 1–2 ลูก ผลสุ่มตรงกันทุกเครื่อง แล้วทำตามกติกา: ทอย 1 ลูก เลขคู่ = เลือกหมวดคำถามเอง เลขคี่ = ต้องตอบคำถามสุ่ม • ทอย 2 ลูก = ผลรวมกำหนดภารกิจ (ถ้าลูกเต๋าเหมือนกันชวนเพื่อนมาทำด้วย) ไม่ทอยใน 60 วินาทีรอบนั้นจบ',
+  color:'ระบบสุ่มสีหนึ่งสีกับหัวข้อให้ทุกคนพูดตามหัวข้อภายใน 60 วินาที โดยห้ามพูดชื่อสีนั้น! ใครเผลอพูด เพื่อนกด 🚨 จับได้ ทุกครั้งที่ถูกจับเสีย 1 คะแนน (กดจับตัวเองเพื่อยอมรับผิดก็ได้) มีสรุปคะแนนสะสมของห้อง',
   insider:'สุ่ม 1 คนเป็น “ผู้ตอบ” และอีก 1 คนเป็น 😈 Insider ทั้งคู่เห็นคำลับ คนที่เหลือต้องทายคำโดยถามผู้ตอบได้แค่ ใช่/ไม่ใช่ ภายใน 4 นาที Insider ต้องแอบชี้นำให้ทายถูกโดยไม่ให้ใครจับได้ พอทายถูกแล้วทุกคนโหวตหา Insider (60 วินาที) ถ้าโหวตถูกฝ่ายผู้ทายชนะ ถ้าพลาดหรือเสมอ Insider ชนะ ทายไม่ทันทุกคนแพ้ (ต้อง 4 คนขึ้นไป • ผู้ตอบสลับคนอัตโนมัติ)',
   battle:'ทุกคนวางเรือลับบนกระดาน 5×5 (เรือ 3 ลำ ยาว 3/2/2 ช่อง) แล้วผลัดกันยิง: เลือกคนที่จะยิงก่อน จากนั้นเลือกช่อง ระบบบอกแค่ โดน/พลาด/จม ของนัดล่าสุด ไม่มีกระดานจดช่องที่ยิงไปแล้ว ต้องจำเอง! เรือหมดลำก็ตกรอบ เหลือคนสุดท้ายชนะ กระสุนจำกัด: 1 ตายิงได้ “จำนวนเป้าหมาย − 1” นัด (ขั้นต่ำ 1) และยิงได้คนละ 1 นัดต่อตา เช่น 4 คน ยิงได้ 2 นัด จะมี 1 คนที่ไม่โดนยิง ยิ่งคนตกรอบกระสุนยิ่งน้อยลง หมดเวลา = ระบบสุ่มยิงกระสุนที่เหลือให้ (วางเรือ 90 วินาที • ตาละ 25 วินาที + 10 วินาทีต่อกระสุนที่เพิ่ม)',
   king:'ทุกคนกดจั่วไพ่จากสำรับเดียวกันบนมือถือตัวเอง (เห็นเฉพาะไพ่ตัวเองก่อน) แล้วเปิดพร้อมกัน ใครแต้มสูงสุดได้เป็น 👑 พระราชา ออกคำสั่งให้ใครในวงก็ได้ ให้ทำภารกิจหรือดื่ม (ไม่สบายใจจะเปลี่ยนเป็นดื่มน้ำก็ได้)',
@@ -116,6 +119,46 @@ function BattleOver({s,ps,bp,ships,hits}:{s:S;ps:P[];bp:BP[];ships:BShip[];hits:
     <p className="card text-center text-sm">{shotText(s.last_shot,nameOf)}</p>
     <div className="grid grid-cols-2 gap-3">{bp.map(b=>{const cs=ships.filter(x=>x.player_id===b.player_id).flatMap(x=>x.cells);const hs=hits.filter(h=>h.player_id===b.player_id).map(h=>h.cell)
       return <div key={b.player_id} className="space-y-1"><p className="text-center text-sm font-bold">{nameOf(b.player_id)}{b.player_id===win&&' 👑'}</p><Grid small cls={boardCls(cs,hs)} sym={boardSym(cs,hs)}/></div>})}</div></div>)}
+const DICE_FACE='⚀⚁⚂⚃⚄⚅'
+const DCATS:[string,string][]=[['truth','🤥 จริงหรือมั่ว'],['never','🙋 ใครเคย…'],['either','⚖️ เลือกข้าง'],['quick','⏱️ 5 วิ ตอบให้ทัน']]
+const COLOR_HEX:Record<string,string>={แดง:'#ef4444',ส้ม:'#f97316',เหลือง:'#eab308',เขียว:'#22c55e',ฟ้า:'#38bdf8',น้ำเงิน:'#2563eb',ม่วง:'#a855f7',ชมพู:'#ec4899',ดำ:'#111827',ขาว:'#f9fafb',เทา:'#9ca3af',น้ำตาล:'#92400e'}
+function diceParts(q:string){const i=q.indexOf('|');return{d:(i<0?q:q.slice(0,i)).split(',').filter(Boolean).map(Number),text:i<0?'':q.slice(i+1)}}
+function Faces({d}:{d:number[]}){return d.length===0?null:<div className="flex justify-center gap-4 text-8xl leading-none" role="img" aria-label={`ลูกเต๋า ${d.join(' และ ')}`}>{d.map((n,i)=><span key={i}>{DICE_FACE[n-1]}</span>)}</div>}
+function Dice({s,me,ps,call}:{s:S;me?:P;ps:P[];call:(fn:string,args:object)=>void}){
+  const {d,text}=diceParts(s.question_text)
+  const roller=ps.find(p=>p.id===s.subject_id)?.nickname??'?';const iRoll=!!me&&me.id===s.subject_id
+  if(s.phase==='roll')return(<div className="space-y-3">
+    <div className="card text-sm space-y-1"><b>กติกา</b><p className="text-white/70">🎲 ทอย 1 ลูก: เลขคู่ = เลือกหมวดคำถาม • เลขคี่ = ตอบคำถามสุ่ม</p><p className="text-white/70">🎲🎲 ทอย 2 ลูก: ผลรวมกำหนดภารกิจ</p></div>
+    {iRoll?<div className="grid grid-cols-2 gap-3"><button className="btn text-lg py-6" onClick={()=>call('roll_dice',{p_session:s.id,p_count:1})}>🎲 ทอย 1 ลูก</button><button className="btn text-lg py-6" onClick={()=>call('roll_dice',{p_session:s.id,p_count:2})}>🎲🎲 ทอย 2 ลูก</button></div>
+    :<p className="text-center text-lg">⏳ รอ {roller} ทอยเต๋า...</p>}</div>)
+  if(s.phase==='pick')return(<div className="space-y-3"><Faces d={d}/><p className="text-center text-lg font-bold">เลขคู่! {iRoll?'เลือกหมวดคำถามที่อยากตอบ':`รอ ${roller} เลือกหมวด...`}</p>
+    {iRoll&&<div className="grid grid-cols-2 gap-2">{DCATS.map(([id,t])=><button key={id} className="btn alt" onClick={()=>call('dice_pick',{p_session:s.id,p_cat:id})}>{t}</button>)}</div>}</div>)
+  return(<div className="space-y-3"><Faces d={d}/><div className="card text-center border-pink-400 text-lg">{text}</div>
+    {iRoll?<button className="btn" onClick={()=>call('dice_done',{p_session:s.id})}>✅ ทำเสร็จแล้ว</button>:<p className="text-center text-sm text-white/60">{roller} กำลังทำตามผล ช่วยกันเชียร์!</p>}</div>)}
+function DiceResult({s,ps}:{s:S;ps:P[]}){
+  const {d,text}=diceParts(s.question_text);const roller=ps.find(p=>p.id===s.subject_id)?.nickname??'?'
+  if(s.outcome==='timeout')return(<div className="text-center space-y-2"><div className="text-5xl">⌛</div><h2 className="text-2xl font-bold">{roller} ไม่ได้ทอยเต๋า</h2><p className="text-white/60">หมดเวลา รอบนี้ผ่านไป</p></div>)
+  return(<div className="space-y-3"><Faces d={d}/><h2 className="text-center text-xl font-bold">ผลของ {roller}</h2><div className="card text-center">{text}</div></div>)}
+function ColorGame({s,me,ps,slips,call}:{s:S;me?:P;ps:P[];slips:Slip[];call:(fn:string,args:object)=>void}){
+  const [c,topic]=s.question_text.split('|')
+  const mine=slips.filter(x=>x.session_id===s.id&&x.reporter_id===me?.id).map(x=>x.target_id)
+  const cnt=(id:string)=>slips.filter(x=>x.session_id===s.id&&x.target_id===id).length
+  return(<div className="space-y-3">
+    <p className="text-center text-sm text-white/60">รอบที่ {s.round}</p>
+    <div className="rounded-2xl py-8 text-center border border-white/30" style={{background:COLOR_HEX[c]??'#444'}}><div className={`text-5xl font-extrabold ${c==='ขาว'||c==='เหลือง'?'text-black':'text-white'}`}>ห้ามพูดคำว่า “{c}”</div></div>
+    <div className="card text-center"><div className="text-sm text-white/60">หัวข้อ (ทุกคนผลัดกันพูด)</div><div className="text-lg font-bold mt-1">{topic}</div></div>
+    <p className="text-center text-sm text-white/60">ใครเผลอพูดชื่อสี เพื่อนกดจับได้เลย! (เสีย 1 คะแนนต่อการจับ)</p>
+    <ul className="grid grid-cols-2 gap-2">{ps.map(p=>{const done=mine.includes(p.id);return <li key={p.id}><button disabled={done||!me} className={`card w-full py-3 ${done?'opacity-40':''}`} onClick={()=>call('color_report',{p_session:s.id,p_target:p.id})}>
+      🚨 {p.nickname}{p.id===me?.id?' (ฉัน ยอมรับ)':''}<div className="text-sm text-white/60">เสียคะแนน {cnt(p.id)}{done?' • จับแล้ว':''}</div></button></li>})}</ul></div>)}
+function ColorResult({s,ps,slips}:{s:S;ps:P[];slips:Slip[]}){
+  const [c,topic]=s.question_text.split('|')
+  const rows=ps.map(p=>({p,n:slips.filter(x=>x.session_id===s.id&&x.target_id===p.id).length,tot:slips.filter(x=>x.target_id===p.id).length})).sort((a,b)=>b.n-a.n||b.tot-a.tot)
+  const worst=rows.filter(r=>r.n>0&&r.n===rows[0].n)
+  return(<div className="space-y-3">
+    <div className="rounded-2xl py-5 text-center border border-white/30" style={{background:COLOR_HEX[c]??'#444'}}><div className={`text-3xl font-extrabold ${c==='ขาว'||c==='เหลือง'?'text-black':'text-white'}`}>สีต้องห้าม: {c}</div></div>
+    <p className="text-center text-sm text-white/60">หัวข้อ: {topic}</p>
+    <h2 className="text-center text-xl font-bold">{worst.length===0?'🎉 ไม่มีใครเผลอพูดเลย!':`😅 ${worst.map(w=>w.p.nickname).join(', ')} เผลอพูดมากที่สุด (${worst[0].n})`}</h2>
+    <ul className="card space-y-1 text-sm">{rows.map(r=><li key={r.p.id} className="flex justify-between"><span>{r.p.nickname}</span><span>รอบนี้ -{r.n} • สะสมทั้งห้อง -{r.tot}</span></li>)}</ul></div>)}
 const MAX_REROLL=3
 function MissionPanel({code,me,host,ps,ms,startOpen,compact,call}:{code:string;me:P;host:boolean;ps:P[];ms:Mission[];startOpen:boolean;compact:boolean;call:(fn:string,args:object)=>void}){
   const [open,setOpen]=useState(startOpen);const [peek,setPeek]=useState(false);const [flash,setFlash]=useState('')
@@ -168,7 +211,7 @@ function Bar({label,n,total,note}:{label:string;n:number;total:number;note?:stri
   {note&&<div className="text-xs text-white/50 mt-1">{note}</div>}</div>)}
 export default function Room(){
   const code=String(useParams().code).toUpperCase();const router=useRouter()
-  const [uid,setUid]=useState('');const [room,setRoom]=useState<R|null>(null);const [ps,setPs]=useState<P[]>([])
+  const [slips,setSlips]=useState<Slip[]>([]);const [uid,setUid]=useState('');const [room,setRoom]=useState<R|null>(null);const [ps,setPs]=useState<P[]>([])
   const [s,setS]=useState<S|null>(null);const [vs,setVs]=useState<V[]>([]);const [sec,setSec]=useState<Sec[]>([]);const [ans,setAns]=useState<number|null>(null)
   const [now,setNow]=useState(Date.now());const [qr,setQr]=useState(false);const [off,setOff]=useState(false);const [err,setErr]=useState('')
   const [game,setGame]=useState('battle');const [skew,setSkew]=useState(0);const [cards,setCards]=useState<Card[]>([]);const [deck,setDeck]=useState<Deck[]>([]);const [peek,setPeek]=useState(false);const [cmd,setCmd]=useState('');const [tgt,setTgt]=useState('ALL');const [bp,setBp]=useState<BP[]>([]);const [bShips,setBShips]=useState<BShip[]>([]);const [bHits,setBHits]=useState<BHit[]>([]);const [ms,setMs]=useState<Mission[]>([])
@@ -182,6 +225,7 @@ export default function Room(){
     if(!r){router.replace(`/join?room=${code}`);return}
     setRoom(r)
     loadMissions(r.id)
+    supabase.from('color_slips').select('session_id,target_id,reporter_id').eq('room_id',r.id).then(({data})=>setSlips(data||[]))
     const [p,g]=await Promise.all([supabase.from('players').select('*').eq('room_id',r.id).order('joined_at'),
       supabase.from('game_sessions').select('*').eq('room_id',r.id).order('started_at',{ascending:false}).limit(1).maybeSingle()])
     setPs((p.data||[]).filter((x:P)=>x.is_connected));setS(g.data)
@@ -204,7 +248,7 @@ export default function Room(){
     const t0=Date.now()
     ensureAuth().then(()=>supabase.rpc('server_now')).then(({data})=>{if(data)setSkew(new Date(data).getTime()-(t0+Date.now())/2)})
     const ch=supabase.channel(`room-${code}`)
-    for(const table of ['players','rooms','game_sessions','votes','mission_assignments'])ch.on('postgres_changes',{event:'*',schema:'public',table},load)
+    for(const table of ['players','rooms','game_sessions','votes','mission_assignments','color_slips'])ch.on('postgres_changes',{event:'*',schema:'public',table},load)
     ch.subscribe(st=>setOff(st==='CLOSED'||st==='CHANNEL_ERROR'))
     const t=setInterval(()=>setNow(Date.now()),250)
     return()=>{supabase.removeChannel(ch);clearInterval(t)}},[code,load])
@@ -212,7 +256,7 @@ export default function Room(){
   const gt=s?.game_type
   const left=s?Math.max(0,Math.ceil((new Date(s.ends_at).getTime()-(now+skew))/1000)):0
   const myVote=vs.find(v=>v.voter_id===me?.id)
-  useEffect(()=>{if(s?.status==='voting'&&!['roulette','king','battle','insider'].includes(s.game_type)&&(left===0
+  useEffect(()=>{if(s?.status==='voting'&&!['roulette','king','battle','insider','dice','color'].includes(s.game_type)&&(left===0
     ||(['most-likely','never','either','odd','sync','quiz'].includes(s.game_type)&&ps.length>1&&s.votes_count>=ps.length)
     ||(s.game_type==='truth'&&ps.length>1&&s.votes_count>=ps.length-1)))
     supabase.rpc('finish_round',{p_session:s.id}).then(load)},[left,ps.length,s,load])
@@ -228,6 +272,11 @@ export default function Room(){
     const id=s.id;const run=()=>supabase.rpc('finish_king',{p_session:id}).then(r=>{if(!r.error)load()});run()
     const t=setInterval(run,1500)
     return()=>clearInterval(t)},[gt,s,left,ps.length,load])
+  useEffect(()=>{if((gt!=='dice'&&gt!=='color')||!s||s.status!=='voting'||left>0)return
+    const id=s.id;const fn=gt==='dice'?'dice_tick':'color_tick'
+    const run=()=>supabase.rpc(fn,{p_session:id}).then(r=>{if(r.data)load()});run()
+    const t=setInterval(run,1500)
+    return()=>clearInterval(t)},[gt,s,left,load])
   useEffect(()=>{if(gt!=='insider'||!s||s.status!=='voting')return
     if(left>0&&!(s.phase==='vote'&&ps.length>1&&s.votes_count>=ps.length))return
     const id=s.id;const run=()=>supabase.rpc('insider_tick',{p_session:id}).then(r=>{if(r.data)load()});run()
@@ -240,7 +289,7 @@ export default function Room(){
   const rid=room?.id
   useEffect(()=>{if(!rid)return;const t=setInterval(()=>{loadMissions(rid)},15000);return()=>clearInterval(t)},[rid,loadMissions])
   async function call(fn:string,args:object){const {error}=await supabase.rpc(fn,args);setErr(error?error.message:'');load()}
-  const go=(g:string)=>g==='insider'?call('start_insider',{p_code:code}):g==='battle'?call('start_battle',{p_code:code}):g==='king'?call('start_king',{p_code:code}):g==='cards'?call('start_cards',{p_code:code}):g==='taboo'?call('start_taboo',{p_code:code}):g==='roulette'?call('start_roulette',{p_code:code}):g.startsWith('quiz')?call('start_quiz',{p_code:code,p_lang:g.includes('-')?g.split('-')[1]:null}):call('start_game',{p_code:code,p_game:g})
+  const go=(g:string)=>g==='dice'?call('start_dice',{p_code:code}):g==='color'?call('start_color',{p_code:code}):g==='insider'?call('start_insider',{p_code:code}):g==='battle'?call('start_battle',{p_code:code}):g==='king'?call('start_king',{p_code:code}):g==='cards'?call('start_cards',{p_code:code}):g==='taboo'?call('start_taboo',{p_code:code}):g==='roulette'?call('start_roulette',{p_code:code}):g.startsWith('quiz')?call('start_quiz',{p_code:code,p_lang:g.includes('-')?g.split('-')[1]:null}):call('start_game',{p_code:code,p_game:g})
   if(!room)return <main className="p-10 text-center text-xl">กำลังโหลด…</main>
   if(room.status==='closed')return <main className="p-10 text-center space-y-4"><div className="text-6xl">⌛</div><p>ห้องนี้ปิดแล้ว</p><a className="btn" href="/">กลับหน้าแรก</a></main>
   const link=typeof window!=='undefined'?`${location.origin}/join?room=${code}`:''
@@ -255,11 +304,11 @@ export default function Room(){
   const insWon=s?.outcome==='group_win'
   const oddP=ps.find(p=>p.id===oddK?.player_id)
   const majWord=sec.find(k=>!k.is_odd)?.word
-  const title=!s?'':gt==='insider'?`🎭 Insider • หมวด: ${s.question_text}`:gt==='battle'?'🚢 เรือรบ':gt==='king'?'👑 พระราชา':gt==='cards'?'🃏 ไพ่ปาร์ตี้':gt==='taboo'?`🙊 ${nm} กำลังใบ้!`:gt==='roulette'?`🎰 คนสุดท้ายต้อง: ${s.question_text}`:gt==='truth'?`${nm} บอกว่า “${s.question_text}” จริงหรือมั่ว?`
+  const title=!s?'':gt==='dice'?`🎲 ${nm} ทอยเต๋า`:gt==='color'?'🎨 สีต้องห้าม!':gt==='insider'?`🎭 Insider • หมวด: ${s.question_text}`:gt==='battle'?'🚢 เรือรบ':gt==='king'?'👑 พระราชา':gt==='cards'?'🃏 ไพ่ปาร์ตี้':gt==='taboo'?`🙊 ${nm} กำลังใบ้!`:gt==='roulette'?`🎰 คนสุดท้ายต้อง: ${s.question_text}`:gt==='truth'?`${nm} บอกว่า “${s.question_text}” จริงหรือมั่ว?`
     :gt==='quick'?`${nm} ต้อง${s.question_text} ใน 5 วิ!`:gt==='mission'?s.question_text
     :gt==='never'?`ใครเคย ${s.question_text}?`:gt==='either'?'เลือกข้าง!':(gt==='sync'||gt==='quiz')?oa:gt==='odd'?`หมวด: ${s.question_text}`:`“${s.question_text}”`
   const gname=GAMES.find(g=>g[0]===game)?.[2]
-  const noCustom=game==='insider'||game==='odd'||game==='taboo'||game==='cards'||game==='king'||game==='battle'||game==='roulette'||game.startsWith('quiz')
+  const noCustom=game==='dice'||game==='color'||game==='insider'||game==='odd'||game==='taboo'||game==='cards'||game==='king'||game==='battle'||game==='roulette'||game.startsWith('quiz')
   const pick=(c:string)=>call('cast_choice',{p_session:s?.id,p_choice:c})
   const nextGame=gt==='quiz'?(game.startsWith('quiz')?game:'quiz'):(gt??'')
   const remain=52-deck.length;const last=deck[deck.length-1];const turnP=ps[deck.length%Math.max(ps.length,1)]
@@ -309,7 +358,9 @@ export default function Room(){
       {s.status==='voting'?<>
         {gt!=='cards'&&<div className={`mx-auto w-20 h-20 rounded-full grid place-items-center text-3xl font-bold border-4 ${left<=5?'border-red-500 animate-pulse':'border-pink-500'}`} aria-live="polite">{left}</div>}
         {gt==='odd'&&<div className="card text-center"><div className="text-sm text-white/60">คำลับของคุณ (อย่าให้ใครเห็น!)</div><div className="text-4xl font-extrabold my-2">{myWord??'…'}</div><p className="text-sm text-white/60">ผลัดกันอธิบายคำนี้แบบไม่บอกตรง ๆ แล้วโหวตคนที่น่าสงสัยที่สุด</p></div>}
-        {gt==='insider'?(s.phase==='vote'
+        {gt==='dice'?<Dice s={s} me={me} ps={ps} call={call}/>
+        :gt==='color'?<ColorGame s={s} me={me} ps={ps} slips={slips} call={call}/>
+        :gt==='insider'?(s.phase==='vote'
           ?<div className="space-y-3"><p className="text-center text-lg">🗳️ ทายถูกแล้ว! ใครคือ 😈 Insider?</p>
             {myVote?<p className="text-center text-lg">✓ โหวตแล้ว<br/><span className="text-white/60 text-sm">รอเพื่อนโหวต... ({s.votes_count}/{ps.length})</span></p>
             :<div className="grid grid-cols-2 gap-2">{ps.filter(x=>x.id!==me?.id&&x.id!==s.subject_id).map(x=><button key={x.id} className="btn alt" onClick={()=>call('insider_vote',{p_session:s.id,p_target:x.id})}>{x.nickname}</button>)}</div>}
@@ -361,6 +412,8 @@ export default function Room(){
               <input className="inp" maxLength={200} aria-label="คำสั่ง" placeholder="เช่น ร้องเพลงท่อนฮุก หรือ ดื่ม 1 จิบ" value={cmd} onChange={e=>setCmd(e.target.value)}/>
               <button className="btn" disabled={!cmd.trim()} onClick={()=>{call('king_command',{p_session:s.id,p_target:tgt==='ALL'?null:tgt,p_text:cmd});setCmd('')}}>👑 ประกาศบัญชา</button></div>
             :<p className="text-center text-white/60">รอ {kingP.nickname} ออกคำสั่ง...</p>)}</>}
+        {gt==='dice'&&<DiceResult s={s} ps={ps}/>}
+        {gt==='color'&&<ColorResult s={s} ps={ps} slips={slips}/>}
         {gt==='insider'&&<>
           <div className="text-center text-5xl">{s.outcome==='timeout'?'⌛':insWon?'🎉':'😈'}</div>
           <h2 className="text-center text-2xl font-bold">{s.outcome==='timeout'?'ทายไม่ทัน! ทุกคนแพ้':insWon?'จับ Insider ได้! ผู้ทายชนะ':'Insider รอดไปได้! Insider ชนะ'}</h2>
